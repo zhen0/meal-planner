@@ -162,11 +162,11 @@ async def parse_dietary_preferences(
 
         logfire.info(
             "Successfully parsed dietary preferences",
-            dietary_restrictions=result.data.dietary_restrictions,
-            cuisines=result.data.cuisines,
+            dietary_restrictions=result.output.dietary_restrictions,
+            cuisines=result.output.cuisines,
         )
 
-        return result.data
+        return result.output
 
     except Exception as e:
         logfire.error("Error parsing dietary preferences", error=str(e))
@@ -225,7 +225,7 @@ async def generate_meal_plan(
         # Run agent with Prefect durability
         result = await prefect_agent.run(user_message)
 
-        meal_plan = result.data
+        meal_plan = result.output
 
         logfire.info(
             "Successfully generated meal plan",
