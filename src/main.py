@@ -212,7 +212,7 @@ async def generate_meals_task(
     persist_result=True,
     result_storage_key="slack-message-{flow_run.id}-{task_run.id}",
 )
-async def post_to_slack_task(meal_plan: MealPlan) -> str:
+async def post_to_slack_task(meal_plan: MealPlan, flow_run_id: str = None) -> str:
     """
     Post meal plan to Slack for approval.
 
@@ -223,7 +223,7 @@ async def post_to_slack_task(meal_plan: MealPlan) -> str:
         str: Slack message timestamp
     """
     with logfire.span("task:post_to_slack"):
-        return await post_meal_plan_to_slack(meal_plan)
+        return await post_meal_plan_to_slack(meal_plan, flow_run_id)
 
 
 @task(
@@ -318,11 +318,15 @@ async def weekly_meal_planner_flow(
                 )
                 meal_plan = await generate_meals_task(preferences, feedback_text)
 
-                # Task 3: Post to Slack
-                logfire.info("Posting meal plan to Slack")
-                message_ts = await post_to_slack_task(meal_plan)
+                # Get flow run ID to include in Slack message
+                flow_run_context = get_run_context()
+                current_flow_run_id = str(flow_run_context.flow_run.id)
 
-                # Task 4: Pause flow and wait for approval
+                # Task 3: Post to Slack with flow_run_id in metadata
+                logfire.info("Posting meal plan to Slack with flow_run_id", flow_run_id=current_flow_run_id)
+                message_ts = await post_to_slack_task(meal_plan, current_flow_run_id)
+
+                # Task 4: Pause flow and wait for approval (webhook will resume)
                 logfire.info(
                     "Pausing flow for approval",
                     timeout_seconds=config.approval_timeout_seconds,
@@ -401,64 +405,10 @@ async def weekly_meal_planner_flow(
         }
 
 
-# Background task to monitor Slack thread and resume flow
-@flow(name="slack-approval-monitor", log_prints=True)
-async def slack_approval_monitor_flow(
-    flow_run_id: str,
-    channel_id: str,
-    thread_ts: str,
-):
-    """
-    Background flow to monitor Slack thread and resume main flow.
-
-    This flow runs alongside the main flow, monitoring the Slack thread
-    for user responses and resuming the paused flow when a response is received.
-
-    Args:
-        flow_run_id: Main flow run ID to resume
-        channel_id: Slack channel ID
-        thread_ts: Slack message timestamp to monitor
-    """
-    config = get_config()
-
-    with logfire.span("flow:slack_approval_monitor"):
-        logfire.info(
-            "Starting Slack approval monitor",
-            flow_run_id=flow_run_id,
-            thread_ts=thread_ts,
-        )
-
-        try:
-            # Monitor thread for approval
-            approval_input = await monitor_slack_thread_for_approval(
-                channel_id=channel_id,
-                thread_ts=thread_ts,
-                timeout_seconds=config.approval_timeout_seconds,
-                poll_interval_seconds=config.slack_poll_interval_seconds,
-            )
-
-            # Resume the paused flow
-            await resume_prefect_flow(flow_run_id, approval_input)
-
-            logfire.info(
-                "Successfully resumed flow from Slack approval",
-                approved=approval_input.approved,
-            )
-
-        except TimeoutError:
-            logfire.error(
-                "Timeout waiting for Slack approval",
-                flow_run_id=flow_run_id,
-            )
-            raise
-
-        except Exception as e:
-            logfire.error(
-                "Error in Slack approval monitor",
-                error=str(e),
-                flow_run_id=flow_run_id,
-            )
-            raise
+# Note: Slack approval is now handled via Prefect webhook
+# When user responds in Slack, Slack Events API sends webhook to Prefect
+# Prefect webhook triggers automation that calls resume_flow_run API
+# See README for setup instructions
 
 
 if __name__ == "__main__":

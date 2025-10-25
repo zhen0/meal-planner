@@ -63,12 +63,13 @@ def format_meal_plan_message(meal_plan: MealPlan) -> str:
 
 
 @logfire.instrument("post_meal_plan_to_slack")
-async def post_meal_plan_to_slack(meal_plan: MealPlan) -> str:
+async def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) -> str:
     """
     Post meal plan to Slack channel.
 
     Args:
         meal_plan: MealPlan to post
+        flow_run_id: Optional flow run ID to include in metadata for webhook
 
     Returns:
         str: Slack message timestamp (for thread monitoring)
@@ -81,14 +82,25 @@ async def post_meal_plan_to_slack(meal_plan: MealPlan) -> str:
 
     message_text = format_meal_plan_message(meal_plan)
 
-    logfire.info("Posting meal plan to Slack", channel_id=config.slack_channel_id)
+    logfire.info("Posting meal plan to Slack", channel_id=config.slack_channel_id, flow_run_id=flow_run_id)
 
     try:
-        response = client.chat_postMessage(
-            channel=config.slack_channel_id,
-            text=message_text,
-            mrkdwn=True,
-        )
+        # Include flow_run_id in metadata so webhook can resume the flow
+        post_kwargs = {
+            "channel": config.slack_channel_id,
+            "text": message_text,
+            "mrkdwn": True,
+        }
+
+        if flow_run_id:
+            post_kwargs["metadata"] = {
+                "event_type": "meal_plan_approval",
+                "event_payload": {
+                    "flow_run_id": flow_run_id,
+                }
+            }
+
+        response = client.chat_postMessage(**post_kwargs)
 
         message_ts = response["ts"]
 
@@ -96,6 +108,7 @@ async def post_meal_plan_to_slack(meal_plan: MealPlan) -> str:
             "Successfully posted meal plan to Slack",
             message_ts=message_ts,
             channel_id=config.slack_channel_id,
+            flow_run_id=flow_run_id,
         )
 
         return message_ts
