@@ -4,6 +4,7 @@ Orchestrates preference parsing, meal generation, approval, and grocery task cre
 """
 
 import asyncio
+import os
 
 import logfire
 from prefect import flow, task
@@ -23,9 +24,16 @@ from .todoist_mcp_integration import create_grocery_tasks_from_meal_plan
 
 
 # Initialize Logfire
-logfire.configure()
-# Note: Pydantic AI automatically instruments Anthropic API calls when using PrefectAgent
-logfire.instrument_httpx()      # Auto-trace HTTP requests (Slack, MCP server)
+# Load token from Prefect secrets and set as environment variable
+try:
+    config = get_config()
+    os.environ["LOGFIRE_TOKEN"] = config.logfire_token
+    logfire.configure()
+    # Note: Pydantic AI automatically instruments Anthropic API calls when using PrefectAgent
+    logfire.instrument_httpx()      # Auto-trace HTTP requests (Slack, MCP server)
+    print("✓ Configured Logfire observability")
+except Exception as e:
+    print(f"ℹ️  Logfire not configured: {e}")
 
 
 @task(name="parse_preferences", retries=2, retry_delay_seconds=10)
