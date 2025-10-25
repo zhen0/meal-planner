@@ -333,7 +333,7 @@ async def weekly_meal_planner_flow(
                 approval_input = await pause_flow_run(
                     wait_for_input=ApprovalInput,
                     timeout=config.approval_timeout_seconds,
-                    key=f"approval_{regeneration_count}",
+                    key=f"approval-{regeneration_count}",
                 )
 
                 # Flow resumes here with approval_input
