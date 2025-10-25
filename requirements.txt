@@ -4,6 +4,7 @@ prefect-client>=3.0.0
 
 # AI/ML
 anthropic>=0.39.0
+pydantic-ai[prefect]>=0.0.14  # Durable execution with Prefect integration
 
 # Integrations
 slack-sdk>=3.33.0

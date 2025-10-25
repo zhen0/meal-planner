@@ -6,6 +6,7 @@ A durable execution agent that generates personalized weekly meal plans using Pr
 
 - **Natural Language Preferences**: Describe your dietary preferences in plain English
 - **AI-Powered Meal Generation**: Claude generates 2 quick meals (<20 min cook time) tailored to your preferences
+- **Durable AI Execution**: Pydantic AI with PrefectAgent for automatic retries and task wrapping
 - **Human-in-the-Loop Approval**: Slack-based approval workflow with pause/resume flow control
 - **Feedback Loop**: Regenerate meals with feedback if you're not satisfied
 - **Automated Grocery Lists**: Ingredients automatically added to Todoist Grocery project
@@ -346,13 +347,36 @@ open htmlcov/index.html
 
 ### Logfire Dashboard
 
-The agent automatically traces all operations to Logfire:
+The agent automatically traces all operations to Logfire with comprehensive instrumentation:
 
-1. **Claude API calls**: Token usage, latency, prompts/responses
-2. **Custom spans**: Preference parsing, meal generation, approval waiting
-3. **Security events**: All project ID validations and access attempts
-4. **Business metrics**: Meals generated, regeneration count, approval time
-5. **Error tracking**: Failed API calls, validation errors, timeouts
+**Automatic Instrumentation:**
+- 🤖 **Pydantic AI Agents**: All agent runs, model requests, structured outputs (via `PrefectAgent`)
+- 🧠 **Claude API**: Token usage, latency, prompts/responses (via Pydantic AI)
+- ⚙️ **Prefect Tasks**: Task executions, retries, durations (via `PrefectAgent` wrapping)
+- 🌐 **HTTP Requests**: Slack API calls, MCP server requests, response times (via `logfire.instrument_httpx()`)
+
+**Pydantic AI Integration:**
+The agent uses `PrefectAgent` to wrap Pydantic AI agents, which automatically:
+- Converts agent runs into Prefect flows
+- Wraps each model request as a Prefect task
+- Enables automatic retries with exponential backoff
+- Provides full traceability in Logfire
+
+**Custom Spans:**
+- Preference parsing agent runs
+- Meal generation agent runs with feedback
+- Approval waiting periods
+- Security validations
+- Grocery task creation
+
+**Logged Data:**
+1. **AI Agent Execution**: Agent runs, model calls, structured outputs, retry attempts
+2. **Claude API calls**: Token usage, latency, prompts/responses
+3. **Prefect execution**: Flow states, task retries, pause/resume events
+4. **HTTP traffic**: Slack posts, thread polling, MCP server requests
+5. **Security events**: All project ID validations and access attempts
+6. **Business metrics**: Meals generated, regeneration count, approval time
+7. **Error tracking**: Failed API calls, validation errors, timeouts
 
 View traces at: https://logfire.pydantic.dev
 

@@ -1,23 +1,16 @@
 """
-Claude API integration for meal planning.
-Handles dietary preference parsing and meal generation.
+Claude API integration for meal planning using Pydantic AI.
+Handles dietary preference parsing and meal generation with durable execution.
 """
 
-import json
 from typing import Optional
 
 import logfire
-from anthropic import Anthropic
+from pydantic_ai import Agent
+from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 
 from .config import get_config
 from .models import DietaryPreferences, MealPlan
-
-
-# Initialize Anthropic client
-def _get_client() -> Anthropic:
-    """Get configured Anthropic client."""
-    config = get_config()
-    return Anthropic(api_key=config.anthropic_api_key)
 
 
 # System prompts
@@ -125,12 +118,11 @@ If you receive feedback from the user (e.g., "don't like tomatoes", "make it spi
 """
 
 
-@logfire.instrument("parse_dietary_preferences")
 async def parse_dietary_preferences(
     preferences_text: str,
 ) -> DietaryPreferences:
     """
-    Parse natural language dietary preferences into structured format.
+    Parse natural language dietary preferences into structured format using Pydantic AI.
 
     Args:
         preferences_text: Natural language dietary preferences
@@ -141,57 +133,53 @@ async def parse_dietary_preferences(
     Raises:
         ValueError: If parsing fails or response is invalid
     """
-    client = _get_client()
+    config = get_config()
+
+    # Create Pydantic AI agent for preference parsing
+    agent = Agent(
+        f'anthropic:{config.anthropic_api_key}:claude-3-5-sonnet-20241022',
+        result_type=DietaryPreferences,
+        system_prompt=PREFERENCE_PARSER_PROMPT,
+        name='dietary-preference-parser',
+    )
+
+    # Wrap with PrefectAgent for durable execution
+    prefect_agent = PrefectAgent(
+        agent,
+        model_task_config=TaskConfig(
+            retries=2,
+            retry_delay_seconds=[10.0, 20.0],
+            timeout_seconds=30.0,
+        ),
+    )
 
     logfire.info("Parsing dietary preferences", preferences_text=preferences_text)
 
     try:
-        # Call Claude API
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1024,
-            system=PREFERENCE_PARSER_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"USER PREFERENCES (raw text):\n{preferences_text}",
-                }
-            ],
+        # Run agent with Prefect durability
+        result = await prefect_agent.run(
+            f"USER PREFERENCES (raw text):\n{preferences_text}"
         )
-
-        # Extract response
-        response_text = message.content[0].text
-        logfire.debug("Claude response", response=response_text)
-
-        # Parse JSON
-        parsed_json = json.loads(response_text)
-
-        # Validate and create DietaryPreferences object
-        preferences = DietaryPreferences(**parsed_json)
 
         logfire.info(
             "Successfully parsed dietary preferences",
-            dietary_restrictions=preferences.dietary_restrictions,
-            cuisines=preferences.cuisines,
+            dietary_restrictions=result.data.dietary_restrictions,
+            cuisines=result.data.cuisines,
         )
 
-        return preferences
+        return result.data
 
-    except json.JSONDecodeError as e:
-        logfire.error("Failed to parse JSON from Claude response", error=str(e))
-        raise ValueError(f"Failed to parse dietary preferences: Invalid JSON response") from e
     except Exception as e:
         logfire.error("Error parsing dietary preferences", error=str(e))
         raise ValueError(f"Failed to parse dietary preferences: {e}") from e
 
 
-@logfire.instrument("generate_meal_plan")
 async def generate_meal_plan(
     preferences: DietaryPreferences,
     feedback: Optional[str] = None,
 ) -> MealPlan:
     """
-    Generate a meal plan based on dietary preferences.
+    Generate a meal plan based on dietary preferences using Pydantic AI.
 
     Args:
         preferences: Structured dietary preferences
@@ -203,7 +191,25 @@ async def generate_meal_plan(
     Raises:
         ValueError: If generation fails or response is invalid
     """
-    client = _get_client()
+    config = get_config()
+
+    # Create Pydantic AI agent for meal generation
+    agent = Agent(
+        f'anthropic:{config.anthropic_api_key}:claude-3-5-sonnet-20241022',
+        result_type=MealPlan,
+        system_prompt=MEAL_GENERATION_PROMPT,
+        name='meal-plan-generator',
+    )
+
+    # Wrap with PrefectAgent for durable execution
+    prefect_agent = PrefectAgent(
+        agent,
+        model_task_config=TaskConfig(
+            retries=2,
+            retry_delay_seconds=[10.0, 20.0],
+            timeout_seconds=60.0,  # Meal generation may take longer
+        ),
+    )
 
     logfire.info(
         "Generating meal plan",
@@ -218,28 +224,10 @@ async def generate_meal_plan(
         if feedback:
             user_message += f"\n\nUSER FEEDBACK (from previous rejection):\n{feedback}\n\nPlease regenerate the meal plan addressing this feedback."
 
-        # Call Claude API
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=4096,
-            system=MEAL_GENERATION_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": user_message,
-                }
-            ],
-        )
+        # Run agent with Prefect durability
+        result = await prefect_agent.run(user_message)
 
-        # Extract response
-        response_text = message.content[0].text
-        logfire.debug("Claude response", response=response_text)
-
-        # Parse JSON
-        parsed_json = json.loads(response_text)
-
-        # Validate and create MealPlan object
-        meal_plan = MealPlan(**parsed_json)
+        meal_plan = result.data
 
         logfire.info(
             "Successfully generated meal plan",
@@ -250,9 +238,6 @@ async def generate_meal_plan(
 
         return meal_plan
 
-    except json.JSONDecodeError as e:
-        logfire.error("Failed to parse JSON from Claude response", error=str(e))
-        raise ValueError(f"Failed to generate meal plan: Invalid JSON response") from e
     except Exception as e:
         logfire.error("Error generating meal plan", error=str(e))
         raise ValueError(f"Failed to generate meal plan: {e}") from e
