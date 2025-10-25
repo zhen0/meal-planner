@@ -45,26 +45,35 @@ tags:
   - todoist
   - weekly
 
-# Environment variables
-# IMPORTANT: Set these as Prefect secrets or environment variables
+# Configuration
+# IMPORTANT: Use Prefect Secrets and Variables instead of environment variables
 # Do NOT commit sensitive values to git
 #
-# Required environment variables:
-# - ANTHROPIC_API_KEY
-# - SLACK_BOT_TOKEN
-# - SLACK_CHANNEL_ID
-# - TODOIST_GROCERY_PROJECT_ID
-# - TODOIST_MCP_SERVER_URL
-# - PREFECT_API_KEY
-# - PREFECT_API_URL
-# - LOGFIRE_TOKEN
+# Required Prefect Secrets (API keys/tokens):
+#   prefect secret set anthropic-api-key "sk-ant-..."
+#   prefect secret set slack-bot-token "xoxb-..."
+#   prefect secret set prefect-api-key "pnu_..."
+#   prefect secret set logfire-token "..."
 #
-# Optional:
-# - TODOIST_MCP_AUTH_TOKEN
-# - SLACK_SIGNING_SECRET
-# - APPROVAL_TIMEOUT_SECONDS (default: 86400)
-# - SLACK_POLL_INTERVAL_SECONDS (default: 30)
-# - MAX_REGENERATION_ATTEMPTS (default: 3)
+# Required Prefect Variables (IDs/URLs):
+#   prefect variable set slack-channel-id "C..."
+#   prefect variable set todoist-grocery-project-id "123456"
+#   prefect variable set todoist-mcp-server-url "https://..."
+#   prefect variable set prefect-api-url "https://api.prefect.cloud/..."
+#
+# Optional Secrets:
+#   prefect secret set slack-signing-secret "..."
+#   prefect secret set todoist-mcp-auth-token "..."
+#
+# Optional Variables (with defaults):
+#   prefect variable set approval-timeout-seconds "86400"
+#   prefect variable set slack-poll-interval-seconds "30"
+#   prefect variable set max-regeneration-attempts "3"
+#
+# Quick Setup:
+#   python scripts/setup_prefect_config.py
+#
+# For local development, use .env file (falls back automatically)
 
 # Pull step (optional - for git-based deployments)
 # pull:

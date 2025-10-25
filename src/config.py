@@ -1,6 +1,7 @@
 """
 Configuration module for Meal Planner Agent.
-Loads and validates all environment variables.
+Loads configuration from Prefect secrets and variables for production,
+with fallback to environment variables for local development.
 """
 
 import os
@@ -10,9 +11,74 @@ from typing import Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
+try:
+    from prefect.blocks.system import Secret, String
+    PREFECT_AVAILABLE = True
+except ImportError:
+    PREFECT_AVAILABLE = False
 
-# Load environment variables from .env file
+
+# Load environment variables from .env file (for local development)
 load_dotenv()
+
+
+def get_secret(name: str, default: str = "") -> str:
+    """
+    Get value from Prefect Secret block or fallback to environment variable.
+
+    Prefect Secrets are used for sensitive data (API keys, tokens).
+    In production (Prefect Cloud), use: prefect block register
+    For local dev, uses environment variables.
+
+    Args:
+        name: Secret/env var name (lowercase with hyphens for Prefect, uppercase with underscores for env)
+        default: Default value if not found
+
+    Returns:
+        Secret value
+    """
+    if PREFECT_AVAILABLE:
+        try:
+            # Try to load from Prefect Secret block
+            # Convert ANTHROPIC_API_KEY -> anthropic-api-key
+            block_name = name.lower().replace("_", "-")
+            secret = Secret.load(block_name)
+            return secret.get()
+        except Exception:
+            # Fall back to environment variable
+            pass
+
+    return os.getenv(name, default)
+
+
+def get_variable(name: str, default: str = "") -> str:
+    """
+    Get value from Prefect Variable or fallback to environment variable.
+
+    Prefect Variables are used for non-sensitive configuration (IDs, URLs).
+    In production (Prefect Cloud), use: prefect variable set NAME value
+    For local dev, uses environment variables.
+
+    Args:
+        name: Variable/env var name (lowercase with hyphens for Prefect, uppercase with underscores for env)
+        default: Default value if not found
+
+    Returns:
+        Variable value
+    """
+    if PREFECT_AVAILABLE:
+        try:
+            from prefect import variables
+            # Convert SLACK_CHANNEL_ID -> slack-channel-id
+            var_name = name.lower().replace("_", "-")
+            value = variables.get(var_name)
+            if value is not None:
+                return value
+        except Exception:
+            # Fall back to environment variable
+            pass
+
+    return os.getenv(name, default)
 
 
 class Config(BaseModel):
@@ -124,32 +190,40 @@ class Config(BaseModel):
 
 def load_config() -> Config:
     """
-    Load and validate configuration from environment variables.
+    Load and validate configuration from Prefect secrets/variables or environment variables.
+
+    Configuration priority:
+    1. Prefect Secrets (for API keys/tokens) - in production
+    2. Prefect Variables (for IDs/URLs) - in production
+    3. Environment variables - for local development
 
     Returns:
         Config: Validated configuration object
 
     Raises:
-        ValueError: If required environment variables are missing or invalid
+        ValueError: If required configuration is missing or invalid
     """
     try:
         config = Config(
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
-            slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
-            slack_channel_id=os.getenv("SLACK_CHANNEL_ID", ""),
-            slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
-            todoist_grocery_project_id=os.getenv("TODOIST_GROCERY_PROJECT_ID", ""),
-            todoist_mcp_server_url=os.getenv("TODOIST_MCP_SERVER_URL", ""),
-            todoist_mcp_auth_token=os.getenv("TODOIST_MCP_AUTH_TOKEN"),
-            prefect_api_key=os.getenv("PREFECT_API_KEY", ""),
-            prefect_api_url=os.getenv("PREFECT_API_URL", ""),
-            prefect_flow_name=os.getenv("PREFECT_FLOW_NAME", "weekly-meal-planner"),
-            prefect_work_pool_name=os.getenv("PREFECT_WORK_POOL_NAME", "managed-execution"),
-            logfire_token=os.getenv("LOGFIRE_TOKEN", ""),
-            logfire_project_name=os.getenv("LOGFIRE_PROJECT_NAME", "meal-planner-agent"),
-            approval_timeout_seconds=int(os.getenv("APPROVAL_TIMEOUT_SECONDS", "86400")),
-            slack_poll_interval_seconds=int(os.getenv("SLACK_POLL_INTERVAL_SECONDS", "30")),
-            max_regeneration_attempts=int(os.getenv("MAX_REGENERATION_ATTEMPTS", "3")),
+            # Secrets (sensitive data)
+            anthropic_api_key=get_secret("ANTHROPIC_API_KEY", ""),
+            slack_bot_token=get_secret("SLACK_BOT_TOKEN", ""),
+            slack_signing_secret=get_secret("SLACK_SIGNING_SECRET") or None,
+            todoist_mcp_auth_token=get_secret("TODOIST_MCP_AUTH_TOKEN") or None,
+            prefect_api_key=get_secret("PREFECT_API_KEY", ""),
+            logfire_token=get_secret("LOGFIRE_TOKEN", ""),
+
+            # Variables (non-sensitive configuration)
+            slack_channel_id=get_variable("SLACK_CHANNEL_ID", ""),
+            todoist_grocery_project_id=get_variable("TODOIST_GROCERY_PROJECT_ID", ""),
+            todoist_mcp_server_url=get_variable("TODOIST_MCP_SERVER_URL", ""),
+            prefect_api_url=get_variable("PREFECT_API_URL", ""),
+            prefect_flow_name=get_variable("PREFECT_FLOW_NAME", "weekly-meal-planner"),
+            prefect_work_pool_name=get_variable("PREFECT_WORK_POOL_NAME", "managed-execution"),
+            logfire_project_name=get_variable("LOGFIRE_PROJECT_NAME", "meal-planner-agent"),
+            approval_timeout_seconds=int(get_variable("APPROVAL_TIMEOUT_SECONDS", "86400")),
+            slack_poll_interval_seconds=int(get_variable("SLACK_POLL_INTERVAL_SECONDS", "30")),
+            max_regeneration_attempts=int(get_variable("MAX_REGENERATION_ATTEMPTS", "3")),
         )
         return config
     except Exception as e:

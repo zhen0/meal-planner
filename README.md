@@ -85,29 +85,76 @@ A durable execution agent that generates personalized weekly meal plans using Pr
 
 ## Configuration
 
-### Required Environment Variables
+The agent uses **Prefect Secrets** for sensitive data (API keys, tokens) and **Prefect Variables** for configuration (IDs, URLs). For local development, it falls back to environment variables from a `.env` file.
 
-Create a `.env` file with the following variables:
+### Production Setup (Prefect Cloud)
+
+#### 1. Set Prefect Secrets (for API keys/tokens)
 
 ```bash
-# Anthropic / Claude
+# Create secrets for sensitive data
+prefect block register --file secrets.json
+
+# Or create them via Prefect Cloud UI or CLI:
+prefect secret set anthropic-api-key "sk-ant-api03-..."
+prefect secret set slack-bot-token "xoxb-..."
+prefect secret set prefect-api-key "pnu_..."
+prefect secret set logfire-token "..."
+
+# Optional secrets
+prefect secret set slack-signing-secret "..."
+prefect secret set todoist-mcp-auth-token "..."
+```
+
+#### 2. Set Prefect Variables (for IDs/URLs)
+
+```bash
+# Set variables for non-sensitive configuration
+prefect variable set slack-channel-id "C..."
+prefect variable set todoist-grocery-project-id "2345678901"
+prefect variable set todoist-mcp-server-url "https://your-hosted-mcp-server.com"
+prefect variable set prefect-api-url "https://api.prefect.cloud/api/accounts/<account-id>/workspaces/<workspace-id>"
+
+# Optional variables with defaults
+prefect variable set logfire-project-name "meal-planner-agent"
+prefect variable set prefect-flow-name "weekly-meal-planner"
+prefect variable set prefect-work-pool-name "managed-execution"
+prefect variable set approval-timeout-seconds "86400"
+prefect variable set slack-poll-interval-seconds "30"
+prefect variable set max-regeneration-attempts "3"
+```
+
+**Quick Setup**: Use the provided setup script:
+```bash
+python scripts/setup_prefect_config.py
+```
+
+### Local Development Setup
+
+For local development, create a `.env` file:
+
+```bash
+# Secrets (API keys and tokens)
 ANTHROPIC_API_KEY="sk-ant-api03-..."
-
-# Slack
 SLACK_BOT_TOKEN="xoxb-..."
-SLACK_CHANNEL_ID="C..."
+PREFECT_API_KEY="pnu_..."
+LOGFIRE_TOKEN="..."
+SLACK_SIGNING_SECRET="..."  # Optional
+TODOIST_MCP_AUTH_TOKEN="..."  # Optional
 
-# Todoist MCP Server (GROCERY PROJECT ONLY)
+# Variables (IDs and URLs)
+SLACK_CHANNEL_ID="C..."
 TODOIST_GROCERY_PROJECT_ID="2345678901"
 TODOIST_MCP_SERVER_URL="https://your-hosted-mcp-server.com"
-
-# Prefect Cloud
-PREFECT_API_KEY="pnu_..."
 PREFECT_API_URL="https://api.prefect.cloud/api/accounts/<account-id>/workspaces/<workspace-id>"
-
-# Logfire
-LOGFIRE_TOKEN="..."
 LOGFIRE_PROJECT_NAME="meal-planner-agent"
+
+# Optional configuration
+PREFECT_FLOW_NAME="weekly-meal-planner"
+PREFECT_WORK_POOL_NAME="managed-execution"
+APPROVAL_TIMEOUT_SECONDS="86400"
+SLACK_POLL_INTERVAL_SECONDS="30"
+MAX_REGENERATION_ATTEMPTS="3"
 ```
 
 ### Flow Parameters
@@ -203,16 +250,15 @@ python -m src.main
    prefect work-pool create managed-execution --type managed
    ```
 
-3. **Deploy the flow:**
+3. **Configure Prefect secrets and variables:**
+   ```bash
+   python scripts/setup_prefect_config.py
+   ```
+   Or manually set them as shown in the Configuration section above.
+
+4. **Deploy the flow:**
    ```bash
    prefect deploy -f deployment/prefect_deployment.yaml
-   ```
-
-4. **Set environment variables as Prefect secrets:**
-   ```bash
-   prefect variable set ANTHROPIC_API_KEY <your-key>
-   prefect variable set SLACK_BOT_TOKEN <your-token>
-   # ... set all other variables
    ```
 
 5. **Verify deployment:**
