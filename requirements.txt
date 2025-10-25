@@ -8,7 +8,7 @@ pydantic-ai[prefect]>=0.0.14  # Durable execution with Prefect integration
 
 # Integrations
 slack-sdk>=3.33.0
-prefect-aws>=0.5.0  # S3 storage blocks for result persistence
+prefect-aws>=0.5.9  # S3 storage blocks for result persistence (compatible with Prefect 3.x)
 
 # Observability
 logfire>=0.70.0
