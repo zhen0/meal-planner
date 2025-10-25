@@ -330,7 +330,7 @@ async def weekly_meal_planner_flow(
 
                 # Use Prefect's pause_flow_run with wait_for_input
                 # This will pause the flow until it's resumed with ApprovalInput
-                approval_input = pause_flow_run(
+                approval_input = await pause_flow_run(
                     wait_for_input=ApprovalInput,
                     timeout=config.approval_timeout_seconds,
                     key=f"approval_{regeneration_count}",
