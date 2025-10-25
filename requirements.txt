@@ -14,9 +14,8 @@ prefect-aws>=0.5.9  # S3 storage blocks for result persistence (compatible with 
 logfire>=0.70.0
 
 # MCP (Model Context Protocol)
-# Note: Update with actual MCP client package when available
-# For now, assuming HTTP client for MCP server
-httpx>=0.27.0
+# Note: pydantic-ai includes MCP support, no separate mcp package needed
+httpx>=0.27.0  # HTTP client for MCP transport
 
 # Data validation
 pydantic>=2.0.0

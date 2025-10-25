@@ -102,8 +102,8 @@ class Config(BaseModel):
         ..., description="Todoist Grocery project ID (ONLY this project will be written to)"
     )
     todoist_mcp_server_url: str = Field(..., description="Hosted MCP server URL")
-    todoist_mcp_auth_token: Optional[str] = Field(
-        default=None, description="MCP authentication token (if required)"
+    todoist_api_token: Optional[str] = Field(
+        default=None, description="Todoist API token (for MCP server)"
     )
 
     # Prefect Cloud
@@ -201,7 +201,7 @@ def load_config() -> Config:
             anthropic_api_key=get_secret("ANTHROPIC_API_KEY", ""),
             slack_bot_token=get_secret("SLACK_BOT_TOKEN", ""),
             slack_signing_secret=get_secret("SLACK_SIGNING_SECRET") or None,
-            todoist_mcp_auth_token=get_secret("TODOIST_MCP_AUTH_TOKEN") or None,
+            todoist_api_token=get_secret("TODOIST_API_TOKEN") or None,
             logfire_token=get_secret("LOGFIRE_TOKEN", ""),
 
             # Variables (non-sensitive configuration)
