@@ -1,12 +1,15 @@
 """
 Todoist MCP integration with strict Grocery project restriction.
 All task creation is validated before being sent to the MCP server.
+Uses MCP (Model Context Protocol) JSON-RPC format.
 """
 
 from typing import List
 
 import httpx
 import logfire
+from mcp.client.session import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from .config import get_config
 from .models import Ingredient, MealPlan, TodoistTask
@@ -16,7 +19,7 @@ from .security_validation import ProjectAccessDenied, validate_and_audit_task_cr
 @logfire.instrument("create_todoist_task")
 async def create_todoist_task(task: TodoistTask) -> dict:
     """
-    Create a single task in Todoist via MCP server.
+    Create a single task in Todoist via MCP server using prompt-based approach.
 
     This function includes strict validation to ensure ONLY the Grocery
     project can be written to.
@@ -29,7 +32,6 @@ async def create_todoist_task(task: TodoistTask) -> dict:
 
     Raises:
         ProjectAccessDenied: If task is for wrong project
-        httpx.HTTPError: If MCP server request fails
     """
     config = get_config()
 
@@ -39,48 +41,47 @@ async def create_todoist_task(task: TodoistTask) -> dict:
         task_content=task.content,
     )
 
-    # Build MCP request payload
-    payload = {
-        "content": task.content,
-        "project_id": task.project_id,
-        "labels": task.labels,
-    }
-
-    if task.due_string:
-        payload["due_string"] = task.due_string
-
-    # Add auth header if MCP server requires it
-    headers = {}
-    if config.todoist_mcp_auth_token:
-        headers["Authorization"] = f"Bearer {config.todoist_mcp_auth_token}"
-
     logfire.info(
         "Creating Todoist task via MCP",
         project_id=task.project_id,
         task_content=task.content,
     )
 
+    # Build the prompt for the MCP server
+    labels_str = ", ".join(task.labels) if task.labels else "none"
+    due_str = f" with due date '{task.due_string}'" if task.due_string else ""
+
+    prompt = f"""Create a Todoist task with the following details:
+- Content: {task.content}
+- Project ID: {task.project_id}
+- Labels: {labels_str}{due_str}
+
+Please create this task and confirm it was created successfully."""
+
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                config.todoist_mcp_server_url,
-                json=payload,
-                headers=headers,
-                timeout=30.0,
-            )
-            response.raise_for_status()
+        # Use MCP client to send prompt to Todoist server
+        server_params = StdioServerParameters(
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-todoist"],
+            env={"TODOIST_API_TOKEN": config.todoist_api_token} if config.todoist_api_token else None,
+        )
 
-            result = response.json()
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
 
-            logfire.info(
-                "Successfully created Todoist task",
-                task_id=result.get("id"),
-                task_content=task.content,
-            )
+                # Send the prompt to create the task
+                result = await session.send_prompt(prompt)
 
-            return result
+                logfire.info(
+                    "Successfully created Todoist task",
+                    task_content=task.content,
+                    result=str(result),
+                )
 
-    except httpx.HTTPError as e:
+                return {"success": True, "content": task.content, "result": str(result)}
+
+    except Exception as e:
         logfire.error(
             "Failed to create Todoist task via MCP",
             error=str(e),
