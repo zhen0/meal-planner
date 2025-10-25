@@ -133,11 +133,10 @@ async def parse_dietary_preferences(
     Raises:
         ValueError: If parsing fails or response is invalid
     """
-    config = get_config()
-
     # Create Pydantic AI agent for preference parsing
+    # Note: ANTHROPIC_API_KEY is set as environment variable in main.py
     agent = Agent(
-        f'anthropic:{config.anthropic_api_key}:claude-3-5-sonnet-20241022',
+        'anthropic:claude-3-5-sonnet-20241022',
         result_type=DietaryPreferences,
         system_prompt=PREFERENCE_PARSER_PROMPT,
         name='dietary-preference-parser',
@@ -191,11 +190,10 @@ async def generate_meal_plan(
     Raises:
         ValueError: If generation fails or response is invalid
     """
-    config = get_config()
-
     # Create Pydantic AI agent for meal generation
+    # Note: ANTHROPIC_API_KEY is set as environment variable in main.py
     agent = Agent(
-        f'anthropic:{config.anthropic_api_key}:claude-3-5-sonnet-20241022',
+        'anthropic:claude-3-5-sonnet-20241022',
         result_type=MealPlan,
         system_prompt=MEAL_GENERATION_PROMPT,
         name='meal-plan-generator',
