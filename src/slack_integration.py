@@ -1,0 +1,396 @@
+"""
+Slack integration for meal plan approval.
+Posts meal proposals, monitors threads for approval, and resumes paused flows.
+"""
+
+import asyncio
+import re
+from typing import Optional, Tuple
+
+import httpx
+import logfire
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+
+from .config import get_config
+from .models import ApprovalInput, MealPlan
+
+
+def _get_slack_client() -> WebClient:
+    """Get configured Slack client."""
+    config = get_config()
+    return WebClient(token=config.slack_bot_token)
+
+
+@logfire.instrument("format_meal_plan_message")
+def format_meal_plan_message(meal_plan: MealPlan) -> str:
+    """
+    Format meal plan as Slack message.
+
+    Args:
+        meal_plan: MealPlan object to format
+
+    Returns:
+        str: Formatted Slack message
+    """
+    lines = ["🍽️ *YOUR WEEKLY MEAL PLAN* (for approval)\n"]
+
+    # Add each meal
+    for i, meal in enumerate(meal_plan.meals, 1):
+        lines.append(f"*Meal {i}: {meal.name}*")
+        lines.append(
+            f"Active: {meal.active_time_minutes} min | "
+            f"Serves {meal.serves} | "
+            f"Ingredients: {len(meal.ingredients)} items"
+        )
+        lines.append(f"_{meal.description}_\n")
+
+    # Add shared ingredients info
+    if meal_plan.shared_ingredients:
+        lines.append(f"📊 *Shared Ingredients:* {len(meal_plan.shared_ingredients)} items")
+        shared_names = [ing.name for ing in meal_plan.shared_ingredients[:3]]
+        lines.append(f"_{', '.join(shared_names)}{'...' if len(meal_plan.shared_ingredients) > 3 else ''}_\n")
+
+    # Add approval instructions
+    lines.append("---")
+    lines.append("*How to respond:*")
+    lines.append("• Reply `approve` or `✓` to accept this plan")
+    lines.append("• Reply `reject` or `✗` to reject")
+    lines.append("• Reply `feedback: <your feedback>` to regenerate with changes")
+    lines.append("  Example: `feedback: make it spicier` or `feedback: no tomatoes`")
+
+    return "\n".join(lines)
+
+
+@logfire.instrument("post_meal_plan_to_slack")
+async def post_meal_plan_to_slack(meal_plan: MealPlan) -> str:
+    """
+    Post meal plan to Slack channel.
+
+    Args:
+        meal_plan: MealPlan to post
+
+    Returns:
+        str: Slack message timestamp (for thread monitoring)
+
+    Raises:
+        SlackApiError: If posting fails
+    """
+    config = get_config()
+    client = _get_slack_client()
+
+    message_text = format_meal_plan_message(meal_plan)
+
+    logfire.info("Posting meal plan to Slack", channel_id=config.slack_channel_id)
+
+    try:
+        response = client.chat_postMessage(
+            channel=config.slack_channel_id,
+            text=message_text,
+            mrkdwn=True,
+        )
+
+        message_ts = response["ts"]
+
+        logfire.info(
+            "Successfully posted meal plan to Slack",
+            message_ts=message_ts,
+            channel_id=config.slack_channel_id,
+        )
+
+        return message_ts
+
+    except SlackApiError as e:
+        logfire.error("Failed to post to Slack", error=str(e))
+        raise
+
+
+@logfire.instrument("parse_slack_response")
+def parse_slack_response(text: str) -> Tuple[bool, Optional[str], bool]:
+    """
+    Parse Slack message text to determine approval status.
+
+    Args:
+        text: Message text from Slack
+
+    Returns:
+        Tuple of (approved, feedback, regenerate):
+            - approved: True if approved, False if rejected/feedback
+            - feedback: Feedback text if provided, None otherwise
+            - regenerate: True if feedback provided (needs regeneration)
+    """
+    text_lower = text.lower().strip()
+
+    # Check for approval
+    if text_lower in ["approve", "approved", "✓", "✅", "yes", "y"]:
+        return (True, None, False)
+
+    # Check for rejection
+    if text_lower in ["reject", "rejected", "✗", "❌", "no", "n"]:
+        return (False, None, False)
+
+    # Check for feedback pattern: "feedback: <text>"
+    feedback_match = re.match(r"feedback:\s*(.+)", text_lower, re.IGNORECASE)
+    if feedback_match:
+        feedback_text = feedback_match.group(1).strip()
+        return (False, feedback_text, True)
+
+    # If no recognized pattern, treat as feedback
+    # This is generous: any reply that's not approve/reject is treated as feedback
+    return (False, text, True)
+
+
+@logfire.instrument("monitor_slack_thread_for_approval")
+async def monitor_slack_thread_for_approval(
+    channel_id: str,
+    thread_ts: str,
+    timeout_seconds: int = 86400,
+    poll_interval_seconds: int = 30,
+) -> ApprovalInput:
+    """
+    Monitor Slack thread for user approval response.
+
+    This function polls the Slack API for replies in a thread until:
+    1. A response is received
+    2. The timeout is reached
+
+    Args:
+        channel_id: Slack channel ID
+        thread_ts: Thread timestamp to monitor
+        timeout_seconds: Maximum time to wait (default 24 hours)
+        poll_interval_seconds: How often to poll (default 30 seconds)
+
+    Returns:
+        ApprovalInput: Parsed approval input from user response
+
+    Raises:
+        TimeoutError: If no response received within timeout
+        SlackApiError: If Slack API calls fail
+    """
+    config = get_config()
+    client = _get_slack_client()
+
+    logfire.info(
+        "Starting Slack thread monitoring",
+        thread_ts=thread_ts,
+        timeout_seconds=timeout_seconds,
+    )
+
+    elapsed_time = 0
+    last_checked_ts = thread_ts
+
+    while elapsed_time < timeout_seconds:
+        try:
+            # Get thread replies
+            response = client.conversations_replies(
+                channel=channel_id,
+                ts=thread_ts,
+                oldest=last_checked_ts,
+                limit=10,
+            )
+
+            messages = response.get("messages", [])
+
+            # Skip the first message if it's the original post
+            if messages and messages[0]["ts"] == thread_ts:
+                messages = messages[1:]
+
+            # Check for new replies
+            if messages:
+                # Get the first reply (most recent)
+                latest_message = messages[0]
+                message_text = latest_message.get("text", "")
+
+                logfire.info(
+                    "Received Slack response",
+                    message_text=message_text,
+                    message_ts=latest_message["ts"],
+                )
+
+                # Parse response
+                approved, feedback, regenerate = parse_slack_response(message_text)
+
+                # Create ApprovalInput
+                approval_input = ApprovalInput(
+                    approved=approved,
+                    feedback=feedback,
+                    regenerate=regenerate,
+                )
+
+                logfire.info(
+                    "Parsed approval input",
+                    approved=approved,
+                    has_feedback=feedback is not None,
+                    regenerate=regenerate,
+                )
+
+                return approval_input
+
+        except SlackApiError as e:
+            logfire.error("Error checking Slack thread", error=str(e))
+            # Continue monitoring despite errors
+
+        # Wait before next poll
+        await asyncio.sleep(poll_interval_seconds)
+        elapsed_time += poll_interval_seconds
+
+        logfire.debug(
+            "Still waiting for Slack response",
+            elapsed_seconds=elapsed_time,
+            timeout_seconds=timeout_seconds,
+        )
+
+    # Timeout reached
+    logfire.error(
+        "Timeout waiting for Slack approval",
+        elapsed_seconds=elapsed_time,
+        timeout_seconds=timeout_seconds,
+    )
+
+    raise TimeoutError(
+        f"No response received in Slack thread within {timeout_seconds} seconds"
+    )
+
+
+@logfire.instrument("resume_prefect_flow")
+async def resume_prefect_flow(
+    flow_run_id: str,
+    approval_input: ApprovalInput,
+) -> dict:
+    """
+    Resume a paused Prefect flow with approval input.
+
+    Calls Prefect Cloud REST API to resume the flow with the user's
+    approval decision.
+
+    Args:
+        flow_run_id: Prefect flow run ID (UUID)
+        approval_input: ApprovalInput object with user decision
+
+    Returns:
+        dict: Response from Prefect API
+
+    Raises:
+        httpx.HTTPError: If API request fails
+    """
+    config = get_config()
+
+    logfire.info(
+        "Resuming Prefect flow",
+        flow_run_id=flow_run_id,
+        approved=approval_input.approved,
+        has_feedback=approval_input.feedback is not None,
+    )
+
+    # Build API request
+    url = f"{config.prefect_api_url}/flow_runs/{flow_run_id}/resume"
+
+    headers = {
+        "Authorization": f"Bearer {config.prefect_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    # Convert ApprovalInput to dict for run_input
+    payload = {
+        "run_input": approval_input.model_dump()
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+
+            result = response.json()
+
+            logfire.info(
+                "Successfully resumed Prefect flow",
+                flow_run_id=flow_run_id,
+                state=result.get("state", {}).get("type"),
+            )
+
+            return result
+
+    except httpx.HTTPError as e:
+        logfire.error(
+            "Failed to resume Prefect flow",
+            error=str(e),
+            flow_run_id=flow_run_id,
+        )
+        raise
+
+
+@logfire.instrument("post_final_meal_plan_to_slack")
+async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
+    """
+    Post final approved meal plan to Slack with full details.
+
+    Args:
+        meal_plan: Approved MealPlan to post
+
+    Raises:
+        SlackApiError: If posting fails
+    """
+    config = get_config()
+    client = _get_slack_client()
+
+    # Build detailed message
+    lines = ["✅ *MEAL PLAN APPROVED*\n", "🍽️ *MEALS THIS WEEK*\n"]
+
+    # Add each meal with full details
+    for i, meal in enumerate(meal_plan.meals, 1):
+        lines.append(f"*Meal {i}: {meal.name}*")
+        lines.append(
+            f"Serves {meal.serves} | "
+            f"Active Time: {meal.active_time_minutes} min | "
+            f"Inactive Time: {meal.inactive_time_minutes} min"
+        )
+        lines.append(f"{meal.description}\n")
+
+        # Ingredients
+        lines.append("*Ingredients:*")
+        for ing in meal.ingredients:
+            line = f"• {ing.name} - {ing.quantity} {ing.unit}"
+            if ing.shopping_notes:
+                line += f" ({ing.shopping_notes})"
+            lines.append(line)
+
+        # Instructions
+        lines.append("\n*Instructions:*")
+        for inst in meal.instructions:
+            lines.append(f"{inst.step}. {inst.text}")
+
+        lines.append("\n---\n")
+
+    # Shared ingredients
+    if meal_plan.shared_ingredients:
+        lines.append(f"📋 *Shared Ingredients* ({len(meal_plan.shared_ingredients)} items)")
+        for ing in meal_plan.shared_ingredients:
+            line = f"• {ing.name} - {ing.quantity} {ing.unit}"
+            if ing.shopping_notes:
+                line += f" ({ing.shopping_notes})"
+            lines.append(line)
+        lines.append("")
+
+    lines.append("✅ Ingredients added to Todoist Grocery project!")
+
+    message_text = "\n".join(lines)
+
+    logfire.info("Posting final meal plan to Slack")
+
+    try:
+        client.chat_postMessage(
+            channel=config.slack_channel_id,
+            text=message_text,
+            mrkdwn=True,
+        )
+
+        logfire.info("Successfully posted final meal plan")
+
+    except SlackApiError as e:
+        logfire.error("Failed to post final meal plan", error=str(e))
+        raise

@@ -1,0 +1,30 @@
+# Logfire Configuration
+# https://logfire.pydantic.dev/docs/
+
+[logfire]
+# Project name (will be overridden by LOGFIRE_PROJECT_NAME env var if set)
+project_name = "meal-planner-agent"
+
+# Automatically instrument common libraries
+[logfire.instrument]
+# Instrument Anthropic SDK for automatic Claude API tracing
+anthropic = true
+
+# Instrument HTTPX for HTTP client calls (MCP server, Prefect API, etc.)
+httpx = true
+
+# Instrument Pydantic for validation tracing
+pydantic = true
+
+# Sampling configuration
+[logfire.sampling]
+# Sample rate for traces (1.0 = 100%, 0.1 = 10%)
+# For production, consider lowering this to reduce costs
+rate = 1.0
+
+# Console output
+[logfire.console]
+# Show logs in console during development
+enabled = true
+# Minimum log level to display
+min_log_level = "info"
