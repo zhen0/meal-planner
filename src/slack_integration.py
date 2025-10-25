@@ -260,8 +260,8 @@ async def resume_prefect_flow(
     """
     Resume a paused Prefect flow with approval input.
 
-    Calls Prefect Cloud REST API to resume the flow with the user's
-    approval decision.
+    Uses Prefect's built-in client which automatically handles authentication
+    when running on Prefect Cloud.
 
     Args:
         flow_run_id: Prefect flow run ID (UUID)
@@ -273,7 +273,7 @@ async def resume_prefect_flow(
     Raises:
         httpx.HTTPError: If API request fails
     """
-    config = get_config()
+    from prefect.client.orchestration import get_client
 
     logfire.info(
         "Resuming Prefect flow",
@@ -282,40 +282,22 @@ async def resume_prefect_flow(
         has_feedback=approval_input.feedback is not None,
     )
 
-    # Build API request
-    url = f"{config.prefect_api_url}/flow_runs/{flow_run_id}/resume"
-
-    headers = {
-        "Authorization": f"Bearer {config.prefect_api_key}",
-        "Content-Type": "application/json",
-    }
-
-    # Convert ApprovalInput to dict for run_input
-    payload = {
-        "run_input": approval_input.model_dump()
-    }
-
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=30.0,
+        # Use Prefect's built-in client (automatically authenticated on Prefect Cloud)
+        async with get_client() as client:
+            await client.resume_flow_run(
+                flow_run_id=flow_run_id,
+                run_input=approval_input.model_dump(),
             )
-            response.raise_for_status()
-
-            result = response.json()
 
             logfire.info(
                 "Successfully resumed Prefect flow",
                 flow_run_id=flow_run_id,
-                state=result.get("state", {}).get("type"),
             )
 
-            return result
+            return {"success": True, "flow_run_id": flow_run_id}
 
-    except httpx.HTTPError as e:
+    except Exception as e:
         logfire.error(
             "Failed to resume Prefect flow",
             error=str(e),

@@ -93,19 +93,17 @@ The agent uses **Prefect Secrets** for sensitive data (API keys, tokens) and **P
 #### 1. Set Prefect Secrets (for API keys/tokens)
 
 ```bash
-# Create secrets for sensitive data
-prefect block register --file secrets.json
-
-# Or create them via Prefect Cloud UI or CLI:
+# Create secrets for sensitive data via Prefect Cloud UI or CLI:
 prefect secret set anthropic-api-key "sk-ant-api03-..."
 prefect secret set slack-bot-token "xoxb-..."
-prefect secret set prefect-api-key "pnu_..."
 prefect secret set logfire-token "..."
 
 # Optional secrets
 prefect secret set slack-signing-secret "..."
 prefect secret set todoist-mcp-auth-token "..."
 ```
+
+**Note**: Prefect API credentials are not needed as secrets. When running on Prefect Cloud, flows automatically have authenticated access to the Prefect API.
 
 #### 2. Set Prefect Variables (for IDs/URLs)
 
@@ -114,7 +112,6 @@ prefect secret set todoist-mcp-auth-token "..."
 prefect variable set slack-channel-id "C..."
 prefect variable set todoist-grocery-project-id "2345678901"
 prefect variable set todoist-mcp-server-url "https://your-hosted-mcp-server.com"
-prefect variable set prefect-api-url "https://api.prefect.cloud/api/accounts/<account-id>/workspaces/<workspace-id>"
 
 # Optional variables with defaults
 prefect variable set logfire-project-name "meal-planner-agent"
@@ -138,7 +135,6 @@ For local development, create a `.env` file:
 # Secrets (API keys and tokens)
 ANTHROPIC_API_KEY="sk-ant-api03-..."
 SLACK_BOT_TOKEN="xoxb-..."
-PREFECT_API_KEY="pnu_..."
 LOGFIRE_TOKEN="..."
 SLACK_SIGNING_SECRET="..."  # Optional
 TODOIST_MCP_AUTH_TOKEN="..."  # Optional
@@ -147,7 +143,6 @@ TODOIST_MCP_AUTH_TOKEN="..."  # Optional
 SLACK_CHANNEL_ID="C..."
 TODOIST_GROCERY_PROJECT_ID="2345678901"
 TODOIST_MCP_SERVER_URL="https://your-hosted-mcp-server.com"
-PREFECT_API_URL="https://api.prefect.cloud/api/accounts/<account-id>/workspaces/<workspace-id>"
 LOGFIRE_PROJECT_NAME="meal-planner-agent"
 
 # Optional configuration
@@ -157,6 +152,8 @@ APPROVAL_TIMEOUT_SECONDS="86400"
 SLACK_POLL_INTERVAL_SECONDS="30"
 MAX_REGENERATION_ATTEMPTS="3"
 ```
+
+**Note**: For local development, you also need `PREFECT_API_KEY` and `PREFECT_API_URL` to deploy flows. These are not needed when flows run on Prefect Cloud.
 
 ### Flow Parameters
 

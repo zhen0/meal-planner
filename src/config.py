@@ -107,8 +107,7 @@ class Config(BaseModel):
     )
 
     # Prefect Cloud
-    prefect_api_key: str = Field(..., description="Prefect Cloud API key")
-    prefect_api_url: str = Field(..., description="Prefect Cloud API URL")
+    # Note: API key and URL are automatically handled by Prefect when running on Prefect Cloud
     prefect_flow_name: str = Field(
         default="weekly-meal-planner", description="Prefect flow name"
     )
@@ -157,14 +156,6 @@ class Config(BaseModel):
             raise ValueError("Slack channel ID must start with 'C'")
         return v
 
-    @field_validator("prefect_api_key")
-    @classmethod
-    def validate_prefect_key(cls, v: str) -> str:
-        """Validate Prefect API key format."""
-        if not v.startswith("pnu_"):
-            raise ValueError("Prefect API key must start with 'pnu_'")
-        return v
-
     @field_validator("todoist_grocery_project_id")
     @classmethod
     def validate_todoist_project_id(cls, v: str) -> str:
@@ -210,14 +201,12 @@ def load_config() -> Config:
             slack_bot_token=get_secret("SLACK_BOT_TOKEN", ""),
             slack_signing_secret=get_secret("SLACK_SIGNING_SECRET") or None,
             todoist_mcp_auth_token=get_secret("TODOIST_MCP_AUTH_TOKEN") or None,
-            prefect_api_key=get_secret("PREFECT_API_KEY", ""),
             logfire_token=get_secret("LOGFIRE_TOKEN", ""),
 
             # Variables (non-sensitive configuration)
             slack_channel_id=get_variable("SLACK_CHANNEL_ID", ""),
             todoist_grocery_project_id=get_variable("TODOIST_GROCERY_PROJECT_ID", ""),
             todoist_mcp_server_url=get_variable("TODOIST_MCP_SERVER_URL", ""),
-            prefect_api_url=get_variable("PREFECT_API_URL", ""),
             prefect_flow_name=get_variable("PREFECT_FLOW_NAME", "weekly-meal-planner"),
             prefect_work_pool_name=get_variable("PREFECT_WORK_POOL_NAME", "managed-execution"),
             logfire_project_name=get_variable("LOGFIRE_PROJECT_NAME", "meal-planner-agent"),

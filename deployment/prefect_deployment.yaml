@@ -53,14 +53,15 @@ tags:
 # Required Prefect Secrets (API keys/tokens):
 #   prefect secret set anthropic-api-key "sk-ant-..."
 #   prefect secret set slack-bot-token "xoxb-..."
-#   prefect secret set prefect-api-key "pnu_..."
 #   prefect secret set logfire-token "..."
 #
 # Required Prefect Variables (IDs/URLs):
 #   prefect variable set slack-channel-id "C..."
 #   prefect variable set todoist-grocery-project-id "123456"
 #   prefect variable set todoist-mcp-server-url "https://..."
-#   prefect variable set prefect-api-url "https://api.prefect.cloud/..."
+#
+# Note: Prefect API credentials not needed - flows on Prefect Cloud
+#       automatically have authenticated access to the Prefect API
 #
 # Optional Secrets:
 #   prefect secret set slack-signing-secret "..."
