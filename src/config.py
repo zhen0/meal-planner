@@ -121,6 +121,7 @@ class Config(BaseModel):
         default="meal-planner-agent", description="Logfire project name"
     )
 
+
     # Flow Configuration
     approval_timeout_seconds: int = Field(
         default=86400, description="Approval timeout in seconds (default 24 hours)"

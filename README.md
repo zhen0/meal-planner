@@ -13,6 +13,8 @@ A durable execution agent that generates personalized weekly meal plans using Pr
 - **Security-First**: Strict validation ensures ONLY the Grocery project can be written to
 - **Full Observability**: Logfire integration for tracing, metrics, and audit logs
 - **Durable Execution**: Prefect Cloud Managed Execution with 24-hour approval timeout
+- **Result Persistence & Caching**: All task and flow results are persisted for recovery and performance
+- **Visual Artifacts**: Rich UI artifacts showing meal plans, recipes, and grocery lists in Prefect UI
 
 ## Architecture
 
@@ -193,13 +195,91 @@ prefect deployment run weekly-meal-planner/weekly-meal-planner \
 
 ### Slack Bot Setup
 
-1. Create a Slack app: https://api.slack.com/apps
-2. Enable bot features and add these scopes:
-   - `chat:write` - Post messages
-   - `conversations.history` - Read thread replies
-3. Install app to workspace
-4. Copy bot token (starts with `xoxb-`)
-5. Invite bot to your meal planning channel
+Follow these steps to create and configure your Slack bot:
+
+#### Step 1: Create a Slack App
+
+1. Go to https://api.slack.com/apps
+2. Click **"Create New App"**
+3. Choose **"From scratch"**
+4. Name your app (e.g., "Meal Planner Bot")
+5. Select your workspace
+
+#### Step 2: Configure Bot Permissions
+
+1. In your app settings, go to **"OAuth & Permissions"** (left sidebar)
+2. Scroll down to **"Scopes"** → **"Bot Token Scopes"**
+3. Add the following scopes:
+   - `chat:write` - Post messages to channels
+   - `chat:write.public` - Post to public channels without joining
+   - `channels:history` - Read message history in public channels
+   - `channels:read` - View basic channel information
+
+**Important**: The bot needs `channels:history` (not just `conversations.history`) to read thread replies.
+
+#### Step 3: Install App to Workspace
+
+1. Scroll up to **"OAuth Tokens for Your Workspace"**
+2. Click **"Install to Workspace"**
+3. Review permissions and click **"Allow"**
+4. **Copy the "Bot User OAuth Token"** - starts with `xoxb-`
+   - This is your `SLACK_BOT_TOKEN`
+   - Store it securely in your `.env` file or Prefect Secrets
+
+#### Step 4: Add Bot to Channel
+
+**This is the critical step to fix the `not_in_channel` error!**
+
+1. Open Slack and navigate to the channel where you want meal plans posted
+2. Click the channel name at the top to open channel details
+3. Go to the **"Integrations"** tab
+4. Click **"Add apps"** (or **"Add an app"**)
+5. Search for your bot name (e.g., "Meal Planner Bot")
+6. Click **"Add"**
+
+**Alternative method:**
+- In the channel, type: `/invite @YourBotName`
+- Or simply mention the bot: `@YourBotName` and click "Invite to Channel"
+
+#### Step 5: Get Channel ID
+
+1. In Slack, right-click the channel name
+2. Select **"View channel details"**
+3. Scroll to the bottom - the Channel ID starts with `C` (e.g., `C01234ABCDE`)
+4. Copy this ID - this is your `SLACK_CHANNEL_ID`
+
+#### Step 6: Test the Bot
+
+Run this quick test to verify the bot can post:
+
+```bash
+# Set environment variables
+export SLACK_BOT_TOKEN="xoxb-your-token"
+export SLACK_CHANNEL_ID="C01234ABCDE"
+
+# Test with Python
+python -c "
+from slack_sdk import WebClient
+client = WebClient(token='$SLACK_BOT_TOKEN')
+response = client.chat_postMessage(
+    channel='$SLACK_CHANNEL_ID',
+    text='🤖 Meal Planner Bot is ready!'
+)
+print('Success!' if response['ok'] else 'Failed: ' + str(response))
+"
+```
+
+If you still get `not_in_channel` error:
+- Double-check the bot is in the channel (you should see it listed under "Integrations")
+- Verify the Channel ID is correct (starts with `C`, not `#channel-name`)
+- Try removing and re-adding the bot to the channel
+
+#### Optional: Signing Secret
+
+For webhook verification (not required for this basic setup):
+1. Go to **"Basic Information"** in app settings
+2. Find **"Signing Secret"** under "App Credentials"
+3. Store as `SLACK_SIGNING_SECRET` if needed
 
 ### Todoist MCP Server Setup
 
@@ -265,6 +345,27 @@ python -m src.main
    ```
 
 The flow will now run every Saturday at 5pm UTC.
+
+### Result Storage Setup (Optional - S3)
+
+By default, results are stored locally in `~/.prefect/storage/`. For production with Prefect Cloud managed execution, use S3:
+
+1. **Create S3 bucket** (or use existing):
+```bash
+aws s3 mb s3://my-meal-planner-results
+```
+
+2. **Run setup script** to create the S3 block:
+```bash
+python scripts/setup_s3_storage.py my-meal-planner-results
+```
+
+3. **Set Prefect variable**:
+```bash
+prefect variable set result-storage-block 's3-bucket/meal-planner-results'
+```
+
+**Note**: The S3 block uses your AWS environment credentials (AWS CLI config, IAM role, etc.) - no need to store access keys in Prefect.
 
 ### Approval Workflow
 

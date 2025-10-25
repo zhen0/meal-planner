@@ -10,6 +10,10 @@ import logfire
 from prefect import flow, task
 from prefect.flow_runs import pause_flow_run
 from prefect.context import get_run_context
+from prefect.artifacts import (
+    create_markdown_artifact,
+    create_table_artifact,
+)
 
 from .claude_integration import generate_meal_plan, parse_dietary_preferences
 from .config import get_config
@@ -43,7 +47,120 @@ except Exception as e:
     raise
 
 
-@task(name="parse_preferences", retries=2, retry_delay_seconds=10)
+# Artifact creation helpers
+def create_meal_plan_artifact(meal_plan: MealPlan, feedback: str | None = None) -> None:
+    """
+    Create a Markdown artifact showing the meal plan in the Prefect UI.
+
+    Args:
+        meal_plan: The generated meal plan
+        feedback: Optional feedback that was provided for regeneration
+    """
+    markdown = "# Weekly Meal Plan\n\n"
+
+    if feedback:
+        markdown += f"_Generated with feedback: {feedback}_\n\n"
+
+    # Add meals
+    for i, meal in enumerate(meal_plan.meals, 1):
+        markdown += f"## Meal {i}: {meal.name}\n\n"
+        markdown += f"**Description:** {meal.description}\n\n"
+        markdown += f"**Details:**\n"
+        markdown += f"- Serves: {meal.serves}\n"
+        markdown += f"- Active time: {meal.active_time_minutes} minutes\n"
+        if meal.inactive_time_minutes > 0:
+            markdown += f"- Inactive time: {meal.inactive_time_minutes} minutes\n"
+        markdown += f"- Ingredients: {len(meal.ingredients)} items\n\n"
+
+        # Ingredients
+        markdown += "**Ingredients:**\n"
+        for ingredient in meal.ingredients:
+            notes = f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
+            markdown += f"- {ingredient.quantity} {ingredient.unit} {ingredient.name}{notes}\n"
+        markdown += "\n"
+
+        # Instructions
+        markdown += "**Instructions:**\n"
+        for instruction in meal.instructions:
+            markdown += f"{instruction.step}. {instruction.text}\n"
+        markdown += "\n---\n\n"
+
+    # Shared ingredients
+    if meal_plan.shared_ingredients:
+        markdown += f"## Shared Ingredients ({len(meal_plan.shared_ingredients)} items)\n\n"
+        for ingredient in meal_plan.shared_ingredients:
+            notes = f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
+            markdown += f"- {ingredient.quantity} {ingredient.unit} {ingredient.name}{notes}\n"
+
+    create_markdown_artifact(
+        key="weekly-meal-plan",
+        markdown=markdown,
+        description="Generated meal plan with recipes and ingredients",
+    )
+
+
+def create_grocery_list_artifact(meal_plan: MealPlan, created_tasks: list[dict]) -> None:
+    """
+    Create table and markdown artifacts showing the grocery list in the Prefect UI.
+
+    Args:
+        meal_plan: The approved meal plan
+        created_tasks: List of created Todoist tasks
+    """
+    # Create a table artifact for quick scanning
+    table_data = []
+
+    # Add all ingredients from all meals
+    for meal in meal_plan.meals:
+        for ingredient in meal.ingredients:
+            table_data.append({
+                "Item": ingredient.name,
+                "Quantity": ingredient.quantity,
+                "Unit": ingredient.unit,
+                "Notes": ingredient.shopping_notes or "",
+                "Meal": meal.name,
+            })
+
+    # Add shared ingredients
+    for ingredient in meal_plan.shared_ingredients:
+        table_data.append({
+            "Item": ingredient.name,
+            "Quantity": ingredient.quantity,
+            "Unit": ingredient.unit,
+            "Notes": ingredient.shopping_notes or "",
+            "Meal": "Shared",
+        })
+
+    create_table_artifact(
+        key="grocery-shopping-list",
+        table=table_data,
+        description=f"Grocery list with {len(table_data)} items for {len(meal_plan.meals)} meals",
+    )
+
+    # Create a markdown artifact with task creation details
+    markdown = f"# Grocery Tasks Created\n\n"
+    markdown += f"**Total tasks created:** {len(created_tasks)}\n\n"
+    markdown += f"**Meals:** {', '.join(meal.name for meal in meal_plan.meals)}\n\n"
+    markdown += "## Task Details\n\n"
+
+    for i, task in enumerate(created_tasks, 1):
+        task_content = task.get("content", "Unknown task")
+        markdown += f"{i}. {task_content}\n"
+
+    create_markdown_artifact(
+        key="grocery-tasks-created",
+        markdown=markdown,
+        description=f"Created {len(created_tasks)} grocery tasks in Todoist",
+    )
+
+
+@task(
+    name="parse_preferences",
+    retries=2,
+    retry_delay_seconds=10,
+    persist_result=True,
+    result_storage_key="preferences-{flow_run.id}",
+)
 async def parse_preferences_task(preferences_text: str) -> DietaryPreferences:
     """
     Parse dietary preferences from natural language.
@@ -58,7 +175,13 @@ async def parse_preferences_task(preferences_text: str) -> DietaryPreferences:
         return await parse_dietary_preferences(preferences_text)
 
 
-@task(name="generate_meals", retries=2, retry_delay_seconds=10)
+@task(
+    name="generate_meals",
+    retries=2,
+    retry_delay_seconds=10,
+    persist_result=True,
+    result_storage_key="meal-plan-{flow_run.id}-{task_run.id}",
+)
 async def generate_meals_task(
     preferences: DietaryPreferences,
     feedback: str | None = None,
@@ -74,10 +197,21 @@ async def generate_meals_task(
         MealPlan: Generated meal plan
     """
     with logfire.span("task:generate_meals", feedback=feedback):
-        return await generate_meal_plan(preferences, feedback)
+        meal_plan = await generate_meal_plan(preferences, feedback)
+
+        # Create meal plan artifact for UI visibility
+        create_meal_plan_artifact(meal_plan, feedback)
+
+        return meal_plan
 
 
-@task(name="post_to_slack", retries=2, retry_delay_seconds=10)
+@task(
+    name="post_to_slack",
+    retries=2,
+    retry_delay_seconds=10,
+    persist_result=True,
+    result_storage_key="slack-message-{flow_run.id}-{task_run.id}",
+)
 async def post_to_slack_task(meal_plan: MealPlan) -> str:
     """
     Post meal plan to Slack for approval.
@@ -92,7 +226,13 @@ async def post_to_slack_task(meal_plan: MealPlan) -> str:
         return await post_meal_plan_to_slack(meal_plan)
 
 
-@task(name="create_grocery_tasks", retries=2, retry_delay_seconds=10)
+@task(
+    name="create_grocery_tasks",
+    retries=2,
+    retry_delay_seconds=10,
+    persist_result=True,
+    result_storage_key="grocery-tasks-{flow_run.id}",
+)
 async def create_grocery_tasks_task(meal_plan: MealPlan) -> list[dict]:
     """
     Create grocery tasks in Todoist via MCP.
@@ -104,10 +244,21 @@ async def create_grocery_tasks_task(meal_plan: MealPlan) -> list[dict]:
         list: Created task responses
     """
     with logfire.span("task:create_grocery_tasks"):
-        return await create_grocery_tasks_from_meal_plan(meal_plan)
+        created_tasks = await create_grocery_tasks_from_meal_plan(meal_plan)
+
+        # Create grocery list artifact for UI visibility
+        create_grocery_list_artifact(meal_plan, created_tasks)
+
+        return created_tasks
 
 
-@task(name="post_final_plan", retries=2, retry_delay_seconds=10)
+@task(
+    name="post_final_plan",
+    retries=2,
+    retry_delay_seconds=10,
+    persist_result=True,
+    result_storage_key="final-confirmation-{flow_run.id}",
+)
 async def post_final_plan_task(meal_plan: MealPlan) -> None:
     """
     Post final approved meal plan to Slack.
@@ -119,7 +270,12 @@ async def post_final_plan_task(meal_plan: MealPlan) -> None:
         await post_final_meal_plan_to_slack(meal_plan)
 
 
-@flow(name="weekly-meal-planner", log_prints=True)
+@flow(
+    name="weekly-meal-planner",
+    log_prints=True,
+    persist_result=True,
+    result_storage='s3-bucket/meal-planner-results',  # S3 block for result storage
+)
 async def weekly_meal_planner_flow(
     dietary_preferences: str = "I like quick, healthy meals under 20 minutes for 3 people including one child."
 ):
