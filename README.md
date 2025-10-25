@@ -26,31 +26,40 @@ A durable execution agent that generates personalized weekly meal plans using Pr
 │  │                                                           │  │
 │  │  1. Parse Preferences (Claude)                           │  │
 │  │  2. Generate Meals (Claude)                              │  │
-│  │  3. Post to Slack                                        │  │
+│  │  3. Post to Slack (with flow_run_id in metadata)        │  │
 │  │  4. ⏸ PAUSE (wait_for_input=ApprovalInput)              │  │
 │  │     └─> Flow state stored in Prefect Cloud              │  │
-│  │  5. Resume with approval decision                        │  │
+│  │  5. Resume with approval decision (via webhook)          │  │
 │  │  6. If feedback: Loop back to step 2                     │  │
 │  │  7. Create Grocery Tasks (MCP) ✓ Security validated      │  │
 │  │  8. Post Final Confirmation                              │  │
 │  └───────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Webhook: slack-meal-approval                             │  │
+│  │  └─> Receives Slack events, creates Prefect events       │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Automation: resume-flow-on-slack-approval                │  │
+│  │  Trigger: slack.message.reply event                       │  │
+│  │  Action: Resume flow with parsed ApprovalInput           │  │
+│  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                             │
-                            │  Slack Thread Monitoring (Background)
+                            │  User replies in Slack thread
                             ▼
                     ┌───────────────┐
-                    │  Slack Bot    │
-                    │  - Posts meal │
-                    │  - Monitors   │
-                    │  - Resumes    │
+                    │  Slack API    │
+                    │  Events API   │
+                    │  sends event  │
                     └───────────────┘
                             │
-                    User responds: "approve" / "feedback: ..."
+                            ▼
+            Prefect Webhook receives & transforms event
                             │
                             ▼
-                    Prefect REST API
-                    POST /flow_runs/{id}/resume
-                    { run_input: ApprovalInput }
+            Prefect Automation detects event & resumes flow
 ```
 
 ## Prerequisites
@@ -360,12 +369,25 @@ aws s3 mb s3://my-meal-planner-results
 python scripts/setup_s3_storage.py my-meal-planner-results
 ```
 
-3. **Set Prefect variable**:
+**Note**: The S3 block uses your AWS environment credentials (AWS CLI config, IAM role, etc.) - no need to store access keys in Prefect. The flow is already configured to use `s3-bucket/meal-planner-results`.
+
+### Webhook Setup for Flow Resumption
+
+To enable automatic flow resumption when users respond in Slack, you need to set up a webhook-based approval flow:
+
+**Architecture**: `User replies in Slack → Slack Events API → Prefect Webhook → Prefect Event → Automation → Resume Flow`
+
+**Quick Setup**:
+1. Create Prefect webhook in Prefect Cloud UI
+2. Configure Slack Events API to send to webhook URL
+3. Run the automation setup script:
 ```bash
-prefect variable set result-storage-block 's3-bucket/meal-planner-results'
+python scripts/setup_webhook_automation.py
 ```
 
-**Note**: The S3 block uses your AWS environment credentials (AWS CLI config, IAM role, etc.) - no need to store access keys in Prefect.
+**Complete Instructions**: See [docs/webhook-setup.md](docs/webhook-setup.md) for detailed step-by-step setup guide.
+
+This replaces the need for background polling and provides instant flow resumption when users approve or provide feedback.
 
 ### Approval Workflow
 
