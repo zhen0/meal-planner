@@ -104,9 +104,14 @@ async def post_final_plan_task(meal_plan: MealPlan) -> None:
 
 
 @flow(name="weekly-meal-planner", log_prints=True)
-async def weekly_meal_planner_flow():
+async def weekly_meal_planner_flow(
+    dietary_preferences: str = "I like quick, healthy meals under 20 minutes for 3 people including one child."
+):
     """
     Main flow for weekly meal planning.
+
+    Args:
+        dietary_preferences: Natural language dietary preferences
 
     This flow:
     1. Parses dietary preferences
@@ -123,8 +128,8 @@ async def weekly_meal_planner_flow():
         logfire.info("Starting weekly meal planner flow")
 
         # Task 1: Parse dietary preferences
-        logfire.info("Parsing dietary preferences")
-        preferences = await parse_preferences_task(config.dietary_preferences)
+        logfire.info("Parsing dietary preferences", dietary_preferences=dietary_preferences)
+        preferences = await parse_preferences_task(dietary_preferences)
 
         regeneration_count = 0
         approval_received = False

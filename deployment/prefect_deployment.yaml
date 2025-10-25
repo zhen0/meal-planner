@@ -34,7 +34,8 @@ schedules:
     active: true
 
 # Parameters (can be overridden at runtime)
-parameters: {}
+parameters:
+  dietary_preferences: "I like quick, healthy meals under 20 minutes for 3 people including one child."
 
 # Tags for organization
 tags:
@@ -49,7 +50,6 @@ tags:
 # Do NOT commit sensitive values to git
 #
 # Required environment variables:
-# - DIETARY_PREFERENCES
 # - ANTHROPIC_API_KEY
 # - SLACK_BOT_TOKEN
 # - SLACK_CHANNEL_ID

@@ -90,9 +90,6 @@ A durable execution agent that generates personalized weekly meal plans using Pr
 Create a `.env` file with the following variables:
 
 ```bash
-# Dietary Preferences (Natural Language)
-DIETARY_PREFERENCES="I'm vegetarian, no mushrooms. I like Mediterranean and Asian flavors."
-
 # Anthropic / Claude
 ANTHROPIC_API_KEY="sk-ant-api03-..."
 
@@ -113,19 +110,40 @@ LOGFIRE_TOKEN="..."
 LOGFIRE_PROJECT_NAME="meal-planner-agent"
 ```
 
-### Dietary Preferences Format
+### Flow Parameters
 
-The `DIETARY_PREFERENCES` variable accepts natural language. Examples:
+The flow accepts the following parameters that can be set at deployment or runtime:
+
+#### `dietary_preferences` (string)
+Natural language description of your dietary preferences. This parameter can be configured in the deployment YAML or overridden at runtime.
+
+**Default**: `"I like quick, healthy meals under 20 minutes for 3 people including one child."`
+
+**Examples**:
 
 ```bash
 # Example 1: Vegetarian with restrictions
-DIETARY_PREFERENCES="I'm vegetarian, no mushrooms or cilantro. I like Mediterranean and Asian flavors. I have chickpeas, lentils, and tofu on hand. Prefer quick salads and stir-fries."
+"I'm vegetarian, no mushrooms or cilantro. I like Mediterranean and Asian flavors. I have chickpeas, lentils, and tofu on hand. Prefer quick salads and stir-fries."
 
 # Example 2: Vegan with time constraint
-DIETARY_PREFERENCES="Vegan diet. No nuts due to allergy. Love spicy food. Maximum 15 minutes cook time."
+"Vegan diet. No nuts due to allergy. Love spicy food. Maximum 15 minutes cook time."
 
 # Example 3: Flexible omnivore
-DIETARY_PREFERENCES="I eat everything except seafood. Prefer one-pot meals and sheet pan dinners. Like bold flavors."
+"I eat everything except seafood. Prefer one-pot meals and sheet pan dinners. Like bold flavors."
+```
+
+To change the default preferences for your deployment, edit `deployment/prefect_deployment.yaml`:
+
+```yaml
+parameters:
+  dietary_preferences: "Your custom preferences here"
+```
+
+To override at runtime when manually triggering a flow:
+
+```bash
+prefect deployment run weekly-meal-planner/weekly-meal-planner \
+  --param dietary_preferences="I want spicy vegan meals"
 ```
 
 ### Slack Bot Setup

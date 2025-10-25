@@ -36,7 +36,6 @@ async def test_config():
     try:
         config = get_config()
         print("✓ Config loaded successfully")
-        print(f"  - Dietary preferences: {config.dietary_preferences[:50]}...")
         print(f"  - Slack channel: {config.slack_channel_id}")
         print(f"  - Todoist project: {config.todoist_grocery_project_id}")
         print(f"  - Prefect API URL: {config.prefect_api_url}")

@@ -21,12 +21,6 @@ class Config(BaseModel):
     All sensitive data and configuration is managed through env vars.
     """
 
-    # Dietary Preferences
-    dietary_preferences: str = Field(
-        default="I like quick, healthy meals under 20 minutes.",
-        description="Natural language dietary preferences",
-    )
-
     # Anthropic / Claude
     anthropic_api_key: str = Field(..., description="Anthropic API key")
 
@@ -140,7 +134,6 @@ def load_config() -> Config:
     """
     try:
         config = Config(
-            dietary_preferences=os.getenv("DIETARY_PREFERENCES", "I like quick, healthy meals under 20 minutes."),
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN", ""),
             slack_channel_id=os.getenv("SLACK_CHANNEL_ID", ""),
