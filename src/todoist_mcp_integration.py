@@ -63,7 +63,7 @@ async def create_todoist_task(task: TodoistTask) -> dict:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{config.todoist_mcp_server_url}/tasks",
+                config.todoist_mcp_server_url,
                 json=payload,
                 headers=headers,
                 timeout=30.0,
