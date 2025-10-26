@@ -319,6 +319,75 @@ async def resume_prefect_flow(
         raise
 
 
+@logfire.instrument("poll_slack_and_resume_flow")
+async def poll_slack_and_resume_flow(
+    channel_id: str,
+    thread_ts: str,
+    flow_run_id: str,
+    timeout_seconds: int = 86400,
+    poll_interval_seconds: int = 30,
+) -> None:
+    """
+    Poll Slack for approval response and automatically resume the Prefect flow.
+
+    This runs as a background task - it monitors Slack for a response,
+    parses it, and resumes the paused flow when a response is received.
+
+    This is a fallback mechanism for when webhooks aren't available.
+
+    Args:
+        channel_id: Slack channel ID
+        thread_ts: Thread timestamp to monitor
+        flow_run_id: Prefect flow run ID to resume
+        timeout_seconds: Maximum time to wait (default 24 hours)
+        poll_interval_seconds: How often to poll (default 30 seconds)
+
+    Raises:
+        TimeoutError: If no response received within timeout
+    """
+    logfire.info(
+        "Starting background Slack polling task",
+        thread_ts=thread_ts,
+        flow_run_id=flow_run_id,
+    )
+
+    try:
+        # Poll Slack for approval
+        approval_input = await monitor_slack_thread_for_approval(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        )
+
+        # Resume the flow with the approval input
+        await resume_prefect_flow(
+            flow_run_id=flow_run_id,
+            approval_input=approval_input,
+        )
+
+        logfire.info(
+            "Background polling task completed successfully",
+            flow_run_id=flow_run_id,
+        )
+
+    except TimeoutError as e:
+        logfire.error(
+            "Background polling task timed out",
+            error=str(e),
+            flow_run_id=flow_run_id,
+        )
+        # Don't raise - let the flow timeout naturally
+
+    except Exception as e:
+        logfire.error(
+            "Background polling task failed",
+            error=str(e),
+            flow_run_id=flow_run_id,
+        )
+        # Don't raise - this is a background task
+
+
 @logfire.instrument("post_final_meal_plan_to_slack")
 async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
     """

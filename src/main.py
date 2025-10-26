@@ -20,6 +20,7 @@ from .config import get_config
 from .models import ApprovalInput, DietaryPreferences, MealPlan
 from .slack_integration import (
     monitor_slack_thread_for_approval,
+    poll_slack_and_resume_flow,
     post_final_meal_plan_to_slack,
     post_meal_plan_to_slack,
     resume_prefect_flow,
@@ -328,19 +329,41 @@ async def weekly_meal_planner_flow(
                 logfire.info("Posting meal plan to Slack with flow_run_id", flow_run_id=current_flow_run_id)
                 message_ts = await post_to_slack_task(meal_plan, current_flow_run_id)
 
-                # Task 4: Pause flow and wait for approval (webhook will resume)
+                # Task 4: Start background polling task as fallback (in case webhooks fail)
+                logfire.info("Starting background Slack polling task as fallback")
+                polling_task = asyncio.create_task(
+                    poll_slack_and_resume_flow(
+                        channel_id=config.slack_channel_id,
+                        thread_ts=message_ts,
+                        flow_run_id=current_flow_run_id,
+                        timeout_seconds=config.approval_timeout_seconds,
+                        poll_interval_seconds=config.slack_poll_interval_seconds,
+                    )
+                )
+
+                # Task 5: Pause flow and wait for approval (webhook OR polling will resume)
                 logfire.info(
-                    "Pausing flow for approval",
+                    "Pausing flow for approval (webhook or polling will resume)",
                     timeout_seconds=config.approval_timeout_seconds,
                 )
 
                 # Use Prefect's pause_flow_run with wait_for_input
                 # This will pause the flow until it's resumed with ApprovalInput
+                # Either the webhook OR the polling task will resume it
                 approval_input = await pause_flow_run(
                     wait_for_input=ApprovalInput,
                     timeout=config.approval_timeout_seconds,
                     key=f"approval-{regeneration_count}",
                 )
+
+                # Cancel the polling task if it's still running (webhook won)
+                if not polling_task.done():
+                    logfire.info("Webhook received response first, cancelling polling task")
+                    polling_task.cancel()
+                    try:
+                        await polling_task
+                    except asyncio.CancelledError:
+                        pass
 
                 # Flow resumes here with approval_input
                 logfire.info(
