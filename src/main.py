@@ -48,6 +48,7 @@ except Exception as e:
 
 
 # Artifact creation helpers
+@task(name="create_meal_plan_artifact")
 def create_meal_plan_artifact(meal_plan: MealPlan, feedback: str | None = None) -> None:
     """
     Create a Markdown artifact showing the meal plan in the Prefect UI.
@@ -99,6 +100,7 @@ def create_meal_plan_artifact(meal_plan: MealPlan, feedback: str | None = None) 
     )
 
 
+@task(name="create_grocery_list_artifact")
 def create_grocery_list_artifact(meal_plan: MealPlan, created_tasks: list[dict]) -> None:
     """
     Create table and markdown artifacts showing the grocery list in the Prefect UI.

@@ -85,7 +85,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     # FastMCP Todoist server expects the Todoist API token in X-API-Key header
     todoist_mcp = MCPServerStreamableHTTP(
         config.todoist_mcp_server_url,
-        headers={"X-API-Key": todoist_token}
+        headers={"Authorization": f"Bearer {todoist_token}"},
     )
 
     # Create Pydantic AI agent with Todoist MCP tools
