@@ -71,8 +71,16 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     total_ingredients = sum(len(meal.ingredients) for meal in meal_plan.meals)
     total_ingredients += len(meal_plan.shared_ingredients)
 
-    # Connect to Todoist MCP server
-    todoist_mcp = MCPServerStreamableHTTP(config.todoist_mcp_server_url)
+    # Connect to Todoist MCP server with authentication
+    # The MCP server expects the Todoist API token in the Authorization header
+    headers = {}
+    if config.todoist_api_token:
+        headers["Authorization"] = f"Bearer {config.todoist_api_token}"
+
+    todoist_mcp = MCPServerStreamableHTTP(
+        config.todoist_mcp_server_url,
+        headers=headers
+    )
 
     # Create Pydantic AI agent with Todoist MCP tools
     agent = Agent(
