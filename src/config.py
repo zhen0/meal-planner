@@ -201,7 +201,7 @@ def load_config() -> Config:
             anthropic_api_key=get_secret("ANTHROPIC_API_KEY", ""),
             slack_bot_token=get_secret("SLACK_BOT_TOKEN", ""),
             slack_signing_secret=get_secret("SLACK_SIGNING_SECRET") or None,
-            todoist_api_token=get_secret("TODOIST_API_TOKEN") or None,
+            todoist_api_token=get_secret("TODOIST_MCP_AUTH_TOKEN") or None,
             logfire_token=get_secret("LOGFIRE_TOKEN", ""),
 
             # Variables (non-sensitive configuration)
