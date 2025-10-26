@@ -81,12 +81,14 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         logfire.error("Failed to load todoist-mcp-auth-token secret", error=str(e))
         raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
 
-    # Connect to Todoist MCP server with authentication
-    # FastMCP Todoist server expects the Todoist API token in X-API-Key header
-    todoist_mcp = MCPServerStreamableHTTP(
-        config.todoist_mcp_server_url,
-        headers={"Authorization": f"Bearer {todoist_token}"},
-    )
+    try:# Connect to Todoist MCP server with authentication
+        todoist_mcp = MCPServerStreamableHTTP(
+            config.todoist_mcp_server_url,
+            headers={"Authorization": f"Bearer {todoist_token}"},
+        )
+    except Exception as e:
+        logfire.error("Failed to connect to Todoist MCP server", error=str(e))
+        raise ValueError(f"Failed to connect to Todoist MCP server: {e}")
 
     # Create Pydantic AI agent with Todoist MCP tools
     agent = Agent(
