@@ -9,6 +9,7 @@ import logfire
 from pydantic_ai import Agent
 from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 from pydantic_ai.mcp import MCPServerStreamableHTTP
+from prefect.blocks.system import Secret
 
 from .config import get_config
 from .models import MealPlan
@@ -71,17 +72,20 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     total_ingredients = sum(len(meal.ingredients) for meal in meal_plan.meals)
     total_ingredients += len(meal_plan.shared_ingredients)
 
-    # Connect to Todoist MCP server with authentication
-    # FastMCP Todoist server expects the Todoist API token in a specific header
-    # Typically X-API-Key or Authorization Bearer format
-    headers = {}
-    if config.todoist_api_token:
-        # Try the standard FastMCP auth pattern first
-        headers["X-API-Key"] = config.todoist_api_token
+    # Load Todoist API token from Prefect secret block
+    try:
+        todoist_secret = await Secret.load("todoist-mcp-auth-token")
+        todoist_token = todoist_secret.get()
+        logfire.info("Loaded Todoist API token from secret block")
+    except Exception as e:
+        logfire.error("Failed to load todoist-mcp-auth-token secret", error=str(e))
+        raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
 
+    # Connect to Todoist MCP server with authentication
+    # FastMCP Todoist server expects the Todoist API token in X-API-Key header
     todoist_mcp = MCPServerStreamableHTTP(
         config.todoist_mcp_server_url,
-        headers=headers
+        headers={"X-API-Key": todoist_token}
     )
 
     # Create Pydantic AI agent with Todoist MCP tools
