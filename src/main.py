@@ -14,6 +14,7 @@ from prefect.artifacts import (
     create_markdown_artifact,
     create_table_artifact,
 )
+from prefect.deployments import run_deployment
 
 from .claude_integration import generate_meal_plan, parse_dietary_preferences
 from .config import get_config
@@ -274,6 +275,51 @@ async def post_final_plan_task(meal_plan: MealPlan) -> None:
 
 
 @flow(
+    name="slack-approval-polling",
+    log_prints=True,
+)
+async def slack_approval_polling_flow(
+    channel_id: str,
+    thread_ts: str,
+    flow_run_id: str,
+    pause_key: str,
+    timeout_seconds: int = 86400,
+    poll_interval_seconds: int = 30,
+):
+    """
+    Independent flow that polls Slack and resumes the paused meal planner flow.
+
+    This runs as a separate deployment so it persists independently,
+    even when the main flow is paused.
+
+    Args:
+        channel_id: Slack channel ID
+        thread_ts: Thread timestamp to monitor
+        flow_run_id: The paused flow run ID to resume
+        pause_key: The key used when pausing (e.g., "approval-0")
+        timeout_seconds: How long to poll before giving up
+        poll_interval_seconds: How often to check Slack
+    """
+    with logfire.span("flow:slack_approval_polling"):
+        logfire.info(
+            "Starting independent Slack polling flow",
+            flow_run_id=flow_run_id,
+            pause_key=pause_key,
+        )
+
+        await poll_slack_and_resume_flow(
+            channel_id=channel_id,
+            thread_ts=thread_ts,
+            flow_run_id=flow_run_id,
+            pause_key=pause_key,
+            timeout_seconds=timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        )
+
+        logfire.info("Slack polling flow completed")
+
+
+@flow(
     name="weekly-meal-planner",
     log_prints=True,
     persist_result=True,
@@ -329,19 +375,26 @@ async def weekly_meal_planner_flow(
                 logfire.info("Posting meal plan to Slack with flow_run_id", flow_run_id=current_flow_run_id)
                 message_ts = await post_to_slack_task(meal_plan, current_flow_run_id)
 
-                # Task 4: Start background polling task as fallback (in case webhooks fail)
-                logfire.info("Starting background Slack polling task as fallback")
+                # Task 4: Kick off independent polling deployment as fallback
+                logfire.info("Kicking off independent Slack polling deployment as fallback")
                 pause_key = f"approval-{regeneration_count}"
-                polling_task = asyncio.create_task(
-                    poll_slack_and_resume_flow(
-                        channel_id=config.slack_channel_id,
-                        thread_ts=message_ts,
-                        flow_run_id=current_flow_run_id,
-                        pause_key=pause_key,
-                        timeout_seconds=config.approval_timeout_seconds,
-                        poll_interval_seconds=config.slack_poll_interval_seconds,
-                    )
+
+                # Trigger polling flow as completely separate deployment run
+                # This runs independently and persists even when this flow pauses
+                await run_deployment(
+                    name="slack-approval-polling/slack-polling",
+                    parameters={
+                        "channel_id": config.slack_channel_id,
+                        "thread_ts": message_ts,
+                        "flow_run_id": current_flow_run_id,
+                        "pause_key": pause_key,
+                        "timeout_seconds": config.approval_timeout_seconds,
+                        "poll_interval_seconds": config.slack_poll_interval_seconds,
+                    },
+                    timeout=0,  # Don't wait for it to complete
                 )
+
+                logfire.info("Polling deployment triggered successfully")
 
                 # Task 5: Pause flow and wait for approval (webhook OR polling will resume)
                 logfire.info(
@@ -352,21 +405,15 @@ async def weekly_meal_planner_flow(
 
                 # Use Prefect's pause_flow_run with wait_for_input
                 # This will pause the flow until it's resumed with ApprovalInput
-                # Either the webhook OR the polling task will resume it
+                # Either the webhook OR the independent polling flow will resume it
                 approval_input = await pause_flow_run(
                     wait_for_input=ApprovalInput,
                     timeout=config.approval_timeout_seconds,
                     key=pause_key,
                 )
 
-                # Cancel the polling task if it's still running (webhook won)
-                if not polling_task.done():
-                    logfire.info("Webhook received response first, cancelling polling task")
-                    polling_task.cancel()
-                    try:
-                        await polling_task
-                    except asyncio.CancelledError:
-                        pass
+                # Note: The polling flow runs independently and will continue
+                # polling until timeout or until this flow resumes (whichever comes first)
 
                 # Flow resumes here with approval_input
                 logfire.info(
