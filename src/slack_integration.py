@@ -301,7 +301,7 @@ async def resume_prefect_flow(
     try:
         # Use Prefect's built-in client (automatically authenticated on Prefect Cloud)
         async with get_client() as client:
-            # Create the flow run input with the keyed approval data
+            # Step 1: Create the flow run input with the keyed approval data
             # Note: value must be a JSON string, not a dict
             await client.create_flow_run_input(
                 flow_run_id=flow_run_id,
@@ -310,9 +310,18 @@ async def resume_prefect_flow(
             )
 
             logfire.info(
-                "Successfully created flow run input and resumed flow",
+                "Created flow run input",
                 flow_run_id=flow_run_id,
                 key=key,
+            )
+
+            # Step 2: Resume the paused flow run
+            # This wakes up the paused flow so it can read the input we just created
+            await client.resume_flow_run(flow_run_id=flow_run_id)
+
+            logfire.info(
+                "Successfully resumed flow",
+                flow_run_id=flow_run_id,
             )
 
             return {"success": True, "flow_run_id": flow_run_id}
