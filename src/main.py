@@ -331,11 +331,13 @@ async def weekly_meal_planner_flow(
 
                 # Task 4: Start background polling task as fallback (in case webhooks fail)
                 logfire.info("Starting background Slack polling task as fallback")
+                pause_key = f"approval-{regeneration_count}"
                 polling_task = asyncio.create_task(
                     poll_slack_and_resume_flow(
                         channel_id=config.slack_channel_id,
                         thread_ts=message_ts,
                         flow_run_id=current_flow_run_id,
+                        pause_key=pause_key,
                         timeout_seconds=config.approval_timeout_seconds,
                         poll_interval_seconds=config.slack_poll_interval_seconds,
                     )
@@ -345,6 +347,7 @@ async def weekly_meal_planner_flow(
                 logfire.info(
                     "Pausing flow for approval (webhook or polling will resume)",
                     timeout_seconds=config.approval_timeout_seconds,
+                    pause_key=pause_key,
                 )
 
                 # Use Prefect's pause_flow_run with wait_for_input
@@ -353,7 +356,7 @@ async def weekly_meal_planner_flow(
                 approval_input = await pause_flow_run(
                     wait_for_input=ApprovalInput,
                     timeout=config.approval_timeout_seconds,
-                    key=f"approval-{regeneration_count}",
+                    key=pause_key,
                 )
 
                 # Cancel the polling task if it's still running (webhook won)

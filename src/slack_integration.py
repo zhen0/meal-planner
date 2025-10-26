@@ -269,6 +269,7 @@ async def monitor_slack_thread_for_approval(
 async def resume_prefect_flow(
     flow_run_id: str,
     approval_input: ApprovalInput,
+    key: str = "approval-0",
 ) -> dict:
     """
     Resume a paused Prefect flow with approval input.
@@ -279,6 +280,7 @@ async def resume_prefect_flow(
     Args:
         flow_run_id: Prefect flow run ID (UUID)
         approval_input: ApprovalInput object with user decision
+        key: The pause key (e.g., "approval-0", "approval-1")
 
     Returns:
         dict: Response from Prefect API
@@ -291,6 +293,7 @@ async def resume_prefect_flow(
     logfire.info(
         "Resuming Prefect flow",
         flow_run_id=flow_run_id,
+        key=key,
         approved=approval_input.approved,
         has_feedback=approval_input.feedback is not None,
     )
@@ -298,14 +301,17 @@ async def resume_prefect_flow(
     try:
         # Use Prefect's built-in client (automatically authenticated on Prefect Cloud)
         async with get_client() as client:
-            await client.resume_flow_run(
+            # Create the flow run input with the keyed approval data
+            await client.create_flow_run_input(
                 flow_run_id=flow_run_id,
-                run_input=approval_input.model_dump(),
+                key=key,
+                value=approval_input.model_dump(),
             )
 
             logfire.info(
-                "Successfully resumed Prefect flow",
+                "Successfully created flow run input and resumed flow",
                 flow_run_id=flow_run_id,
+                key=key,
             )
 
             return {"success": True, "flow_run_id": flow_run_id}
@@ -315,6 +321,7 @@ async def resume_prefect_flow(
             "Failed to resume Prefect flow",
             error=str(e),
             flow_run_id=flow_run_id,
+            key=key,
         )
         raise
 
@@ -324,6 +331,7 @@ async def poll_slack_and_resume_flow(
     channel_id: str,
     thread_ts: str,
     flow_run_id: str,
+    pause_key: str = "approval-0",
     timeout_seconds: int = 86400,
     poll_interval_seconds: int = 30,
 ) -> None:
@@ -339,6 +347,7 @@ async def poll_slack_and_resume_flow(
         channel_id: Slack channel ID
         thread_ts: Thread timestamp to monitor
         flow_run_id: Prefect flow run ID to resume
+        pause_key: The key used when pausing the flow (e.g., "approval-0")
         timeout_seconds: Maximum time to wait (default 24 hours)
         poll_interval_seconds: How often to poll (default 30 seconds)
 
@@ -349,6 +358,7 @@ async def poll_slack_and_resume_flow(
         "Starting background Slack polling task",
         thread_ts=thread_ts,
         flow_run_id=flow_run_id,
+        pause_key=pause_key,
     )
 
     try:
@@ -364,6 +374,7 @@ async def poll_slack_and_resume_flow(
         await resume_prefect_flow(
             flow_run_id=flow_run_id,
             approval_input=approval_input,
+            key=pause_key,
         )
 
         logfire.info(
