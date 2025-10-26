@@ -1,5 +1,5 @@
 # Prefect Deployment Configuration
-# Deploy this to Prefect Cloud with: prefect deploy -f deployment/prefect_deployment.yaml
+# Deploy this to Prefect Cloud with: prefect deploy deployment/prefect_deployment.yaml
 
 name: weekly-meal-planner
 version: 1.0.0

@@ -302,10 +302,11 @@ async def resume_prefect_flow(
         # Use Prefect's built-in client (automatically authenticated on Prefect Cloud)
         async with get_client() as client:
             # Create the flow run input with the keyed approval data
+            # Note: value must be a JSON string, not a dict
             await client.create_flow_run_input(
                 flow_run_id=flow_run_id,
                 key=key,
-                value=approval_input.model_dump(),
+                value=approval_input.model_dump_json(),
             )
 
             logfire.info(
