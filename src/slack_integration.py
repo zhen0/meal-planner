@@ -154,7 +154,6 @@ def parse_slack_response(text: str) -> Tuple[bool, Optional[str], bool]:
 
 
 @logfire.instrument("monitor_slack_thread_for_approval")
-@task(name="monitor_slack_thread_for_approval")
 async def monitor_slack_thread_for_approval(
     channel_id: str,
     thread_ts: str,
@@ -373,13 +372,11 @@ async def poll_slack_and_resume_flow(
         )
 
         # Resume the flow with the approval input
-        @task(name="resume_prefect_flow")
-        resume_prefect_flow_task = await resume_prefect_flow(
+        await resume_prefect_flow(
             flow_run_id=flow_run_id,
-                approval_input=approval_input,
-                key=pause_key,
-            )
-            return resume_prefect_flow_task
+            approval_input=approval_input,
+            key=pause_key,
+        )
 
         logfire.info(
             "Background polling task completed successfully",
