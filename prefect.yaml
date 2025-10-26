@@ -40,12 +40,47 @@ deployments:
     7. Posts final confirmation
   entrypoint: src/main.py:weekly_meal_planner_flow
   parameters: {}
+  
   work_pool:
-    name: managed
+    name: new-managed
     work_queue_name: null
-    job_variables: {}
+    job_variables:
+      python_version: "3.11"
+      pip_packages:
+        - "prefect>=3.0.0"
+        - "prefect-client>=3.0.0"
+        - "anthropic>=0.39.0"
+        - "pydantic-ai[prefect]>=0.0.14"
+        - "slack-sdk>=3.33.0"
+        - "prefect-aws>=0.5.9"
+        - "logfire>=0.70.0"
+        - "httpx>=0.27.0"
+        - "pydantic>=2.0.0"
+        - "python-dotenv>=1.0.0"
   schedules:
   - cron: 0 17 * * 6
     timezone: EST
     day_or: true
     active: true
+
+- name: slack-polling
+  version: null
+  tags: ["helper", "polling"]
+  description: |-
+    Independent polling flow that monitors Slack for approval responses.
+
+    Triggered automatically by the main meal planner flow. Polls Slack
+    every 30 seconds and resumes the paused flow when a response is detected.
+  entrypoint: src/main.py:slack_approval_polling_flow
+  parameters: {}
+
+  work_pool:
+    name: new-managed
+    work_queue_name: null
+    job_variables:
+      python_version: "3.11"
+      pip_packages:
+        - "prefect>=3.0.0"
+        - "slack-sdk>=3.33.0"
+        - "pydantic>=2.0.0"
+        - "logfire>=0.70.0"
