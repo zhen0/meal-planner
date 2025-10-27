@@ -157,6 +157,27 @@ def create_grocery_list_artifact(meal_plan: MealPlan, created_tasks: list[dict])
         description=f"Created {len(created_tasks)} grocery tasks in Todoist",
     )
 
+    # Create a simple plain list artifact with unique items only
+    unique_items = set()
+
+    # Collect unique ingredient names from all meals
+    for meal in meal_plan.meals:
+        for ingredient in meal.ingredients:
+            unique_items.add(ingredient.name)
+
+    # Add unique shared ingredients
+    for ingredient in meal_plan.shared_ingredients:
+        unique_items.add(ingredient.name)
+
+    # Create plain markdown list (sorted alphabetically)
+    simple_list = "\n".join(sorted(unique_items))
+
+    create_markdown_artifact(
+        key="grocery-simple-list",
+        markdown=simple_list,
+        description=f"Simple list of {len(unique_items)} unique grocery items",
+    )
+
 
 @task(
     name="parse_preferences",
