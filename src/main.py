@@ -24,6 +24,7 @@ from .slack_integration import (
     poll_slack_and_resume_flow,
     post_final_meal_plan_to_slack,
     post_meal_plan_to_slack,
+    post_simple_grocery_list_to_slack,
     resume_prefect_flow,
 )
 from .todoist_mcp_integration import create_grocery_tasks_from_meal_plan
@@ -295,6 +296,24 @@ async def post_final_plan_task(meal_plan: MealPlan) -> None:
         await post_final_meal_plan_to_slack(meal_plan)
 
 
+@task(
+    name="post_simple_grocery_list",
+    retries=2,
+    retry_delay_seconds=10,
+    persist_result=True,
+    result_storage_key="simple-grocery-list-{flow_run.id}",
+)
+async def post_simple_grocery_list_task(meal_plan: MealPlan) -> None:
+    """
+    Post simple grocery list to Slack.
+
+    Args:
+        meal_plan: Final approved meal plan
+    """
+    with logfire.span("task:post_simple_grocery_list"):
+        await post_simple_grocery_list_to_slack(meal_plan)
+
+
 @flow(
     name="slack-approval-polling",
     log_prints=True,
@@ -486,6 +505,10 @@ async def weekly_meal_planner_flow(
         # Task 6: Post final confirmation
         logfire.info("Posting final meal plan to Slack")
         await post_final_plan_task(meal_plan)
+
+        # Task 7: Post simple grocery list
+        logfire.info("Posting simple grocery list to Slack")
+        await post_simple_grocery_list_task(meal_plan)
 
         logfire.info(
             "Weekly meal planner flow completed",

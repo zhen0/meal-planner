@@ -399,6 +399,57 @@ async def poll_slack_and_resume_flow(
         # Don't raise - this is a background task
 
 
+@logfire.instrument("post_simple_grocery_list_to_slack")
+async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
+    """
+    Post a simple grocery list to Slack with unique items only.
+
+    Args:
+        meal_plan: Approved MealPlan to extract grocery list from
+
+    Raises:
+        SlackApiError: If posting fails
+    """
+    config = get_config()
+    client = _get_slack_client()
+
+    # Collect unique ingredient names
+    unique_items = set()
+
+    for meal in meal_plan.meals:
+        for ingredient in meal.ingredients:
+            unique_items.add(ingredient.name)
+
+    for ingredient in meal_plan.shared_ingredients:
+        unique_items.add(ingredient.name)
+
+    # Build simple list message
+    lines = ["🛒 *GROCERY LIST*\n"]
+
+    # Add items alphabetically
+    for item in sorted(unique_items):
+        lines.append(f"• {item}")
+
+    lines.append(f"\n_Total: {len(unique_items)} items_")
+
+    message_text = "\n".join(lines)
+
+    logfire.info("Posting simple grocery list to Slack")
+
+    try:
+        client.chat_postMessage(
+            channel=config.slack_channel_id,
+            text=message_text,
+            mrkdwn=True,
+        )
+
+        logfire.info("Successfully posted simple grocery list")
+
+    except SlackApiError as e:
+        logfire.error("Failed to post simple grocery list", error=str(e))
+        raise
+
+
 @logfire.instrument("post_final_meal_plan_to_slack")
 async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
     """
