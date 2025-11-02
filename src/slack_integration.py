@@ -12,6 +12,7 @@ import httpx
 import logfire
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from prefect.blocks.system import Secret
 
 from .models import ApprovalInput, MealPlan
 
