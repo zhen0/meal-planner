@@ -383,9 +383,11 @@ async def weekly_meal_planner_flow(
     # config.validate_required_for_flow()
 
     # Set environment variables required by Pydantic AI and Logfire
-    anthropic_api_key = Secret.load("anthropic-api-key")
-    logfire_token = Secret.load("logfire-token")
+    anthropic_secret = await Secret.load("anthropic-api-key")
+    anthropic_api_key = anthropic_secret.get()
     os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
+    logfire_secret = await Secret.load("logfire-token")
+    logfire_token = logfire_secret.get()
     os.environ["LOGFIRE_TOKEN"] = logfire_token
 
     # Configure Logfire observability
