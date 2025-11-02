@@ -19,7 +19,7 @@ from .models import ApprovalInput, MealPlan
 
 def _get_slack_client() -> WebClient:
     """Get configured Slack client."""
-    slack_bot_secret = Secret.load("slack-bot-token")
+    slack_bot_secret = await Secret.load("slack-bot-token")
     slack_bot_token = slack_bot_secret.get()
     return WebClient(token=slack_bot_token)
 
