@@ -19,8 +19,8 @@ from .models import ApprovalInput, MealPlan
 def _get_slack_client() -> WebClient:
     """Get configured Slack client."""
     # config = get_config()
-    slack_bot_token = Secret.load("slack-bot-token").get()
-    return WebClient(token=slack_bot_token)
+    slack_bot_token = Secret.load("slack-bot-token")
+    return WebClient(token=slack_bot_token.get())
 
 
 @logfire.instrument("format_meal_plan_message")
