@@ -85,23 +85,36 @@ class Config(BaseModel):
     """
     Application configuration loaded from environment variables.
     All sensitive data and configuration is managed through env vars.
+
+    Note: When running in Prefect Cloud, configure secrets/variables using:
+      - Secrets (sensitive): prefect secret create <name> --value <value>
+      - Variables (non-sensitive): prefect variable set <name> <value>
     """
 
     # Anthropic / Claude
-    anthropic_api_key: str = Field(..., description="Anthropic API key")
+    anthropic_api_key: Optional[str] = Field(
+        default=None, description="Anthropic API key (required for flow execution)"
+    )
 
     # Slack
-    slack_bot_token: str = Field(..., description="Slack bot token (xoxb-...)")
-    slack_channel_id: str = Field(..., description="Slack channel ID for posting meals")
+    slack_bot_token: Optional[str] = Field(
+        default=None, description="Slack bot token (xoxb-..., required for flow execution)"
+    )
+    slack_channel_id: Optional[str] = Field(
+        default=None, description="Slack channel ID for posting meals (required for flow execution)"
+    )
     slack_signing_secret: Optional[str] = Field(
         default=None, description="Slack app signing secret (optional)"
     )
 
     # Todoist MCP - GROCERY PROJECT ONLY
-    todoist_grocery_project_id: str = Field(
-        ..., description="Todoist Grocery project ID (ONLY this project will be written to)"
+    todoist_grocery_project_id: Optional[str] = Field(
+        default=None,
+        description="Todoist Grocery project ID (ONLY this project will be written to, required for flow execution)"
     )
-    todoist_mcp_server_url: str = Field(..., description="Hosted MCP server URL")
+    todoist_mcp_server_url: Optional[str] = Field(
+        default=None, description="Hosted MCP server URL (required for flow execution)"
+    )
     todoist_api_token: Optional[str] = Field(
         default=None, description="Todoist API token (for MCP server)"
     )
@@ -116,11 +129,12 @@ class Config(BaseModel):
     )
 
     # Logfire
-    logfire_token: str = Field(..., description="Logfire authentication token")
+    logfire_token: Optional[str] = Field(
+        default=None, description="Logfire authentication token (required for flow execution)"
+    )
     logfire_project_name: str = Field(
         default="meal-planner-agent", description="Logfire project name"
     )
-
 
     # Flow Configuration
     approval_timeout_seconds: int = Field(
@@ -133,36 +147,70 @@ class Config(BaseModel):
         default=3, description="Maximum meal regeneration attempts"
     )
 
-    @field_validator("anthropic_api_key")
+    @field_validator("anthropic_api_key", mode="before")
     @classmethod
-    def validate_anthropic_key(cls, v: str) -> str:
-        """Validate Anthropic API key format."""
+    def validate_anthropic_key(cls, v: str | None) -> str | None:
+        """Validate Anthropic API key format (only if provided)."""
+        if not v or v.strip() == "":
+            return None
+        v = v.strip()
         if not v.startswith("sk-ant-"):
-            raise ValueError("Anthropic API key must start with 'sk-ant-'")
+            raise ValueError(
+                "Anthropic API key must start with 'sk-ant-'. "
+                "Set the 'anthropic-api-key' secret in Prefect Cloud."
+            )
         return v
 
-    @field_validator("slack_bot_token")
+    @field_validator("slack_bot_token", mode="before")
     @classmethod
-    def validate_slack_token(cls, v: str) -> str:
-        """Validate Slack bot token format."""
+    def validate_slack_token(cls, v: str | None) -> str | None:
+        """Validate Slack bot token format (only if provided)."""
+        if not v or v.strip() == "":
+            return None
+        v = v.strip()
         if not v.startswith("xoxb-"):
-            raise ValueError("Slack bot token must start with 'xoxb-'")
+            raise ValueError(
+                "Slack bot token must start with 'xoxb-'. "
+                "Set the 'slack-bot-token' secret in Prefect Cloud."
+            )
         return v
 
-    @field_validator("slack_channel_id")
+    @field_validator("slack_channel_id", mode="before")
     @classmethod
-    def validate_slack_channel(cls, v: str) -> str:
-        """Validate Slack channel ID format."""
+    def validate_slack_channel(cls, v: str | None) -> str | None:
+        """Validate Slack channel ID format (only if provided)."""
+        if not v or v.strip() == "":
+            return None
+        v = v.strip()
         if not v.startswith("C"):
-            raise ValueError("Slack channel ID must start with 'C'")
+            raise ValueError(
+                "Slack channel ID must start with 'C'. "
+                "Set the 'slack-channel-id' variable in Prefect Cloud."
+            )
         return v
 
-    @field_validator("todoist_grocery_project_id")
+    @field_validator("todoist_grocery_project_id", mode="before")
     @classmethod
-    def validate_todoist_project_id(cls, v: str) -> str:
-        """Validate Todoist project ID is not empty."""
-        if not v or not v.strip():
-            raise ValueError("Todoist Grocery project ID cannot be empty")
+    def validate_todoist_project_id(cls, v: str | None) -> str | None:
+        """Validate Todoist project ID (only if provided)."""
+        if not v or v.strip() == "":
+            return None
+        return v.strip()
+
+    @field_validator("todoist_mcp_server_url", mode="before")
+    @classmethod
+    def validate_todoist_mcp_url(cls, v: str | None) -> str | None:
+        """Validate Todoist MCP server URL (only if provided)."""
+        if not v or v.strip() == "":
+            return None
+        return v.strip()
+
+    @field_validator("logfire_token", mode="before")
+    @classmethod
+    def validate_logfire_token(cls, v: str | None) -> str | None:
+        """Validate Logfire token (only if provided)."""
+        if not v or v.strip() == "":
+            return None
         return v.strip()
 
     @field_validator("approval_timeout_seconds", "slack_poll_interval_seconds", "max_regeneration_attempts")
@@ -172,6 +220,43 @@ class Config(BaseModel):
         if v <= 0:
             raise ValueError("Value must be positive")
         return v
+
+    def validate_required_for_flow(self) -> None:
+        """
+        Validate that all required configuration is present for flow execution.
+
+        This should be called at the start of the flow to ensure all necessary
+        secrets and variables are configured in Prefect Cloud.
+
+        Raises:
+            ValueError: If any required configuration is missing
+        """
+        missing = []
+
+        if not self.anthropic_api_key:
+            missing.append("anthropic-api-key (Secret)")
+        if not self.slack_bot_token:
+            missing.append("slack-bot-token (Secret)")
+        if not self.slack_channel_id:
+            missing.append("slack-channel-id (Variable)")
+        if not self.todoist_grocery_project_id:
+            missing.append("todoist-grocery-project-id (Variable)")
+        if not self.todoist_mcp_server_url:
+            missing.append("todoist-mcp-server-url (Variable)")
+        if not self.logfire_token:
+            missing.append("logfire-token (Secret)")
+
+        if missing:
+            raise ValueError(
+                f"Missing required configuration for flow execution:\n"
+                f"  {', '.join(missing)}\n\n"
+                f"Configure in Prefect Cloud using:\n"
+                f"  Secrets: prefect secret create <name> --value <value>\n"
+                f"  Variables: prefect variable set <name> <value>\n\n"
+                f"Example:\n"
+                f"  prefect secret create anthropic-api-key --value sk-ant-...\n"
+                f"  prefect variable set slack-channel-id C01234567"
+            )
 
     class Config:
         """Pydantic configuration."""
@@ -190,24 +275,24 @@ def load_config() -> Config:
     3. Environment variables - for local development
 
     Returns:
-        Config: Validated configuration object
+        Config: Validated configuration object (may have None values for unset secrets)
 
     Raises:
-        ValueError: If required configuration is missing or invalid
+        ValueError: If configuration format is invalid
     """
     try:
         config = Config(
-            # Secrets (sensitive data)
-            anthropic_api_key=get_secret("ANTHROPIC_API_KEY", ""),
-            slack_bot_token=get_secret("SLACK_BOT_TOKEN", ""),
+            # Secrets (sensitive data) - will be None if not set
+            anthropic_api_key=get_secret("ANTHROPIC_API_KEY") or None,
+            slack_bot_token=get_secret("SLACK_BOT_TOKEN") or None,
             slack_signing_secret=get_secret("SLACK_SIGNING_SECRET") or None,
             todoist_api_token=get_secret("TODOIST_MCP_AUTH_TOKEN") or None,
-            logfire_token=get_secret("LOGFIRE_TOKEN", ""),
+            logfire_token=get_secret("LOGFIRE_TOKEN") or None,
 
-            # Variables (non-sensitive configuration)
-            slack_channel_id=get_variable("SLACK_CHANNEL_ID", ""),
-            todoist_grocery_project_id=get_variable("TODOIST_GROCERY_PROJECT_ID", ""),
-            todoist_mcp_server_url=get_variable("TODOIST_MCP_SERVER_URL", ""),
+            # Variables (non-sensitive configuration) - will be None if not set
+            slack_channel_id=get_variable("SLACK_CHANNEL_ID") or None,
+            todoist_grocery_project_id=get_variable("TODOIST_GROCERY_PROJECT_ID") or None,
+            todoist_mcp_server_url=get_variable("TODOIST_MCP_SERVER_URL") or None,
             prefect_flow_name=get_variable("PREFECT_FLOW_NAME", "weekly-meal-planner"),
             prefect_work_pool_name=get_variable("PREFECT_WORK_POOL_NAME", "managed-execution"),
             logfire_project_name=get_variable("LOGFIRE_PROJECT_NAME", "meal-planner-agent"),

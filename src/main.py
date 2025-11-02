@@ -372,6 +372,10 @@ async def weekly_meal_planner_flow(
     # are injected as environment variables via job_variables
     config = get_config()
 
+    # Validate that all required configuration is present
+    # This will raise a clear error if secrets/variables are not configured in Prefect Cloud
+    config.validate_required_for_flow()
+
     # Set environment variables required by Pydantic AI and Logfire
     os.environ["ANTHROPIC_API_KEY"] = config.anthropic_api_key
     os.environ["LOGFIRE_TOKEN"] = config.logfire_token
