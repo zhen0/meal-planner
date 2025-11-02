@@ -15,9 +15,11 @@ from prefect.artifacts import (
     create_table_artifact,
 )
 from prefect.deployments import run_deployment
+from prefect.blocks.system import Secret
+from prefect.variables import Variable
 
 from .claude_integration import generate_meal_plan, parse_dietary_preferences
-from .config import get_config
+# from .config import get_config
 from .models import ApprovalInput, DietaryPreferences, MealPlan
 from .slack_integration import (
     monitor_slack_thread_for_approval,
@@ -32,6 +34,10 @@ from .todoist_mcp_integration import create_grocery_tasks_from_meal_plan
 
 # Configuration is loaded lazily inside the flow to work with Prefect managed execution
 # Environment variables should be set via deployment job_variables
+
+timeout_seconds = 86400
+poll_interval_seconds = 30
+max_regeneration_attempts = 3
 
 
 # Artifact creation helpers
@@ -307,8 +313,8 @@ async def slack_approval_polling_flow(
     thread_ts: str,
     flow_run_id: str,
     pause_key: str,
-    timeout_seconds: int = 86400,
-    poll_interval_seconds: int = 30,
+    timeout_seconds: int = timeout_seconds,
+    poll_interval_seconds: int = poll_interval_seconds,
 ):
     """
     Independent flow that polls Slack and resumes the paused meal planner flow.
@@ -367,18 +373,18 @@ async def weekly_meal_planner_flow(
     6. If feedback: regenerates meal plan
     7. Posts final confirmation
     """
-    # Load configuration inside flow (not at module import time)
-    # This works with Prefect managed execution where secrets/variables
-    # are injected as environment variables via job_variables
-    config = get_config()
+    # # Load configuration inside flow (not at module import time)
+    # # This works with Prefect managed execution where secrets/variables
+    # # are injected as environment variables via job_variables
+    # config = get_config()
 
-    # Validate that all required configuration is present
-    # This will raise a clear error if secrets/variables are not configured in Prefect Cloud
-    config.validate_required_for_flow()
+    # # Validate that all required configuration is present
+    # # This will raise a clear error if secrets/variables are not configured in Prefect Cloud
+    # config.validate_required_for_flow()
 
     # Set environment variables required by Pydantic AI and Logfire
-    os.environ["ANTHROPIC_API_KEY"] = config.anthropic_api_key
-    os.environ["LOGFIRE_TOKEN"] = config.logfire_token
+    os.environ["ANTHROPIC_API_KEY"] = Secret.load("anthropic-api-key").get()
+    os.environ["LOGFIRE_TOKEN"] = Secret.load("logfire-token").get()
 
     # Configure Logfire observability
     logfire.configure()
@@ -396,7 +402,7 @@ async def weekly_meal_planner_flow(
         feedback_text = None
 
         # Meal generation and approval loop
-        while not approval_received and regeneration_count <= config.max_regeneration_attempts:
+        while not approval_received and regeneration_count <= 3:
             with logfire.span("meal_generation_iteration", iteration=regeneration_count):
                 # Task 2: Generate meal plan
                 logfire.info(
@@ -423,12 +429,12 @@ async def weekly_meal_planner_flow(
                 await run_deployment(
                     name="slack-approval-polling/slack-polling",
                     parameters={
-                        "channel_id": config.slack_channel_id,
+                        "channel_id": Variable.get("slack_channel_id"),
                         "thread_ts": message_ts,
                         "flow_run_id": current_flow_run_id,
                         "pause_key": pause_key,
-                        "timeout_seconds": config.approval_timeout_seconds,
-                        "poll_interval_seconds": config.slack_poll_interval_seconds,
+                        "timeout_seconds": timeout_seconds,
+                        "poll_interval_seconds": poll_interval_seconds,
                     },
                     timeout=0,  # Don't wait for it to complete
                 )
@@ -438,7 +444,7 @@ async def weekly_meal_planner_flow(
                 # Task 5: Pause flow and wait for approval (webhook OR polling will resume)
                 logfire.info(
                     "Pausing flow for approval (webhook or polling will resume)",
-                    timeout_seconds=config.approval_timeout_seconds,
+                    timeout_seconds=timeout_seconds,
                     pause_key=pause_key,
                 )
 
@@ -447,7 +453,7 @@ async def weekly_meal_planner_flow(
                 # Either the webhook OR the independent polling flow will resume it
                 approval_input = await pause_flow_run(
                     wait_for_input=ApprovalInput,
-                    timeout=config.approval_timeout_seconds,
+                    timeout=timeout_seconds,
                     key=pause_key,
                 )
 
@@ -479,10 +485,10 @@ async def weekly_meal_planner_flow(
                         regeneration_count=regeneration_count,
                     )
 
-                    if regeneration_count > config.max_regeneration_attempts:
+                    if regeneration_count > max_regeneration_attempts:
                         logfire.warning(
                             "Max regeneration attempts reached",
-                            max_attempts=config.max_regeneration_attempts,
+                            max_attempts=max_regeneration_attempts,
                         )
                         # Use last meal plan even if not approved
                         approval_received = True

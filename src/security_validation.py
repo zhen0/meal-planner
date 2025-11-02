@@ -5,7 +5,7 @@ Ensures ONLY the Grocery project can be written to.
 
 import logfire
 
-from .config import get_config
+from prefect.variables import Variable
 
 
 class ProjectAccessDenied(Exception):
@@ -33,8 +33,8 @@ def validate_project_id(project_id: str) -> None:
     Raises:
         ProjectAccessDenied: If project_id does not match the Grocery project ID
     """
-    config = get_config()
-    grocery_project_id = config.todoist_grocery_project_id
+    # config = get_config()
+    grocery_project_id = Variable.get("todoist_grocery_project_id")
 
     if project_id != grocery_project_id:
         # Log security incident
