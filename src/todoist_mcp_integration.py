@@ -101,10 +101,12 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         ),
     )
 
+    # Get the project ID
+    project_id = await variables.get("todoist_grocery_project_id", default=None)
+
     # Build the prompt with meal plan details
     prompt = f"""Create Todoist grocery tasks for the following meal plan.
 
-    project_id = await variables.get("todoist_grocery_project_id", default=None)
 **CRITICAL: Use project_id: {project_id}**
 
 **Meal Plan:**
