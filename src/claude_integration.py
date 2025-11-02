@@ -136,7 +136,7 @@ async def parse_dietary_preferences(
     # Create Pydantic AI agent for preference parsing
     # Note: ANTHROPIC_API_KEY is set as environment variable in main.py
     agent = Agent(
-        'anthropic:claude-3-5-sonnet-20241022',
+        'anthropic:claude-4-sonnet-20250514',
         output_type=DietaryPreferences,
         system_prompt=PREFERENCE_PARSER_PROMPT,
         name='dietary-preference-parser',
@@ -193,7 +193,7 @@ async def generate_meal_plan(
     # Create Pydantic AI agent for meal generation
     # Note: ANTHROPIC_API_KEY is set as environment variable in main.py
     agent = Agent(
-        'anthropic:claude-3-5-sonnet-20241022',
+        'anthropic:claude-4-sonnet-20250514',
         output_type=MealPlan,
         system_prompt=MEAL_GENERATION_PROMPT,
         name='meal-plan-generator',

@@ -93,7 +93,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
     # Create Pydantic AI agent with Todoist MCP tools
     agent = Agent(
-        'anthropic:claude-3-5-sonnet-20241022',
+        'anthropic:claude-4-sonnet-20250514',
         system_prompt=TODOIST_AGENT_PROMPT,
         toolsets=[todoist_mcp],
         name='todoist-grocery-task-creator',
