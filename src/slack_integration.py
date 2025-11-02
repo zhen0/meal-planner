@@ -4,11 +4,10 @@ Posts meal proposals, monitors threads for approval, and resumes paused flows.
 """
 
 import asyncio
+import os
 import re
 from typing import Optional, Tuple
 
-from prefect.variables import Variable
-import httpx
 import logfire
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -18,8 +17,6 @@ from .models import ApprovalInput, MealPlan
 
 def _get_slack_client() -> WebClient:
     """Get configured Slack client from environment variable."""
-    import os
-
     slack_bot_token = os.environ.get("SLACK_BOT_TOKEN")
     if not slack_bot_token:
         raise ValueError("SLACK_BOT_TOKEN environment variable not set")
@@ -81,7 +78,7 @@ def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) -> str
     Raises:
         SlackApiError: If posting fails
     """
-    channel_id= Variable.get("slack_channel_id")
+    channel_id = os.environ.get("SLACK_CHANNEL_ID")
 
     message_text = format_meal_plan_message(meal_plan)
     logfire.info("Posting meal plan to Slack", channel_id=channel_id, flow_run_id=flow_run_id)
@@ -413,7 +410,7 @@ async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
     Raises:
         SlackApiError: If posting fails
     """
-    channel_id = Variable.get("slack_channel_id")
+    channel_id = os.environ.get("SLACK_CHANNEL_ID")
     client = _get_slack_client()
 
     # Collect unique ingredient names
@@ -464,7 +461,7 @@ async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
     Raises:
         SlackApiError: If posting fails
     """
-    channel_id = Variable.get("slack_channel_id")
+    channel_id = os.environ.get("SLACK_CHANNEL_ID")
     client = _get_slack_client()
 
     # Build detailed message

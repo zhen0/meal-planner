@@ -16,7 +16,6 @@ from prefect.artifacts import (
 )
 from prefect.deployments import run_deployment
 from prefect.blocks.system import Secret
-from prefect.variables import Variable
 
 from .claude_integration import generate_meal_plan, parse_dietary_preferences
 from .models import ApprovalInput, DietaryPreferences, MealPlan
@@ -382,6 +381,8 @@ async def weekly_meal_planner_flow(
     slack_secret = await Secret.load("slack-bot-token")
     slack_token = slack_secret.get()
     os.environ["SLACK_BOT_TOKEN"] = slack_token
+    slack_channel = await variables.get("slack_channel_id")
+    os.environ["SLACK_CHANNEL_ID"] = slack_channel
 
     # Configure Logfire observability
     logfire.configure()
@@ -420,7 +421,7 @@ async def weekly_meal_planner_flow(
                 # Task 4: Kick off independent polling deployment as fallback
                 logfire.info("Kicking off independent Slack polling deployment as fallback")
                 pause_key = f"approval-{regeneration_count}"
-                channel_id = await variables.get("slack_channel_id", default=None)
+                channel_id = os.environ.get("SLACK_CHANNEL_ID")
 
                 # Trigger polling flow as completely separate deployment run
                 # This runs independently and persists even when this flow pauses
