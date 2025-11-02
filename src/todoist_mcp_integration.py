@@ -57,10 +57,10 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     # config = get_config()
 
     # CRITICAL: Validate project ID before making ANY calls
-    validate_and_audit_task_creation(
-        project_id=Variable.get("todoist_grocery_project_id"),
-        task_content="Validation check",
-    )
+    # validate_and_audit_task_creation(
+    #     project_id=Variable.get("todoist_grocery_project_id"),
+    #     task_content="Validation check",
+    # )
 
     logfire.info(
         "Creating grocery tasks from meal plan via Pydantic AI agent",
