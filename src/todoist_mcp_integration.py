@@ -13,7 +13,7 @@ from prefect.blocks.system import Secret
 from prefect.variables import Variable
 # from .config import get_config
 from .models import MealPlan
-from .security_validation import validate_and_audit_task_creation
+# from .security_validation import validate_and_audit_task_creation
 
 
 # System prompt for Todoist task creation agent
