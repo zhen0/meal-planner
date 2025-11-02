@@ -79,13 +79,11 @@ async def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) 
     Raises:
         SlackApiError: If posting fails
     """
-    
-    slack_channel_id = await variables.get("slack_channel_id", default=None)
-    client = _get_slack_client()
+    channel_id = await variables.get("slack_channel_id", default=None)
+    client = await _get_slack_client()
 
     message_text = format_meal_plan_message(meal_plan)
-    channel_id = await variables.get("slack_channel_id", default=None)
-    logfire.info("Posting meal plan to Slack", channel_id= channel_id, flow_run_id=flow_run_id)
+    logfire.info("Posting meal plan to Slack", channel_id=channel_id, flow_run_id=flow_run_id)
 
     try:
         # Include flow_run_id in metadata so webhook can resume the flow
@@ -183,7 +181,7 @@ async def monitor_slack_thread_for_approval(
         TimeoutError: If no response received within timeout
         SlackApiError: If Slack API calls fail
     """
-    client = _get_slack_client()
+    client = await _get_slack_client()
 
     logfire.info(
         "Starting Slack thread monitoring",
@@ -412,7 +410,7 @@ async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
     Raises:
         SlackApiError: If posting fails
     """
-    client = _get_slack_client()
+    client = await _get_slack_client()
 
     # Collect unique ingredient names
     unique_items = set()
@@ -462,7 +460,7 @@ async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
     Raises:
         SlackApiError: If posting fails
     """
-    client = _get_slack_client()
+    client = await _get_slack_client()
 
     # Build detailed message
     lines = ["✅ *MEAL PLAN APPROVED*\n", "🍽️ *MEALS THIS WEEK*\n"]

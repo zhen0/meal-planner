@@ -10,7 +10,7 @@ from pydantic_ai import Agent
 from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 from prefect.blocks.system import Secret
-from prefect.variables import Variable
+from prefect import variables
 
 from .models import MealPlan
 
@@ -72,7 +72,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         logfire.error("Failed to load todoist-mcp-auth-token secret", error=str(e))
         raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
 
-    todoist_mcp_server_url = Variable.get("todoist_mcp_server_url")
+    todoist_mcp_server_url = await variables.get("todoist_mcp_server_url", default=None)
     try:
         # Connect to Todoist MCP server with authentication
         todoist_mcp = MCPServerStreamableHTTP(

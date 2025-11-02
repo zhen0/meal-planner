@@ -7,7 +7,7 @@ import asyncio
 import os
 
 import logfire
-from prefect import flow, task
+from prefect import flow, task, variables
 from prefect.flow_runs import pause_flow_run
 from prefect.context import get_run_context
 from prefect.artifacts import (
