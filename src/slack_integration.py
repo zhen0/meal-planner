@@ -18,9 +18,27 @@ from .models import ApprovalInput, MealPlan
 
 
 def _get_slack_client() -> WebClient:
-    """Get configured Slack client."""
-    slack_bot_secret = Secret.load("slack-bot-token")
-    slack_bot_token = slack_bot_secret.get()
+    """Get configured Slack client - loads secret synchronously."""
+    import asyncio
+    import inspect
+
+    # Check if we're in an async context
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # We're in an async context, need to use sync API
+            # Use prefect.runtime to get the secret value directly
+            from prefect.runtime import secret
+            slack_bot_token = secret.get("slack-bot-token")
+        else:
+            # We're in a sync context
+            slack_bot_secret = Secret.load("slack-bot-token")
+            slack_bot_token = slack_bot_secret.get()
+    except RuntimeError:
+        # No event loop, use sync version
+        slack_bot_secret = Secret.load("slack-bot-token")
+        slack_bot_token = slack_bot_secret.get()
+
     return WebClient(token=slack_bot_token)
 
 
