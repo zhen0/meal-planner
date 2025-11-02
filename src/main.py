@@ -30,24 +30,8 @@ from .slack_integration import (
 from .todoist_mcp_integration import create_grocery_tasks_from_meal_plan
 
 
-# Initialize configuration and set environment variables
-# Pydantic AI and Logfire require certain values to be set as environment variables
-try:
-    config = get_config()
-
-    # Set Anthropic API key for Pydantic AI
-    os.environ["ANTHROPIC_API_KEY"] = config.anthropic_api_key
-
-    # Set Logfire token for observability
-    os.environ["LOGFIRE_TOKEN"] = config.logfire_token
-    logfire.configure()
-    # Note: Pydantic AI automatically instruments Anthropic API calls when using PrefectAgent
-    logfire.instrument_httpx()      # Auto-trace HTTP requests (Slack, MCP server)
-
-    print("✓ Configured Anthropic API and Logfire observability")
-except Exception as e:
-    print(f"ℹ️  Configuration error: {e}")
-    raise
+# Configuration is loaded lazily inside the flow to work with Prefect managed execution
+# Environment variables should be set via deployment job_variables
 
 
 # Artifact creation helpers
@@ -383,7 +367,18 @@ async def weekly_meal_planner_flow(
     6. If feedback: regenerates meal plan
     7. Posts final confirmation
     """
+    # Load configuration inside flow (not at module import time)
+    # This works with Prefect managed execution where secrets/variables
+    # are injected as environment variables via job_variables
     config = get_config()
+
+    # Set environment variables required by Pydantic AI and Logfire
+    os.environ["ANTHROPIC_API_KEY"] = config.anthropic_api_key
+    os.environ["LOGFIRE_TOKEN"] = config.logfire_token
+
+    # Configure Logfire observability
+    logfire.configure()
+    logfire.instrument_httpx()  # Auto-trace HTTP requests (Slack, MCP server)
 
     with logfire.span("flow:weekly_meal_planner"):
         logfire.info("Starting weekly meal planner flow")
