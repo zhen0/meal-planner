@@ -12,33 +12,17 @@ import httpx
 import logfire
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from prefect.blocks.system import Secret
 
 from .models import ApprovalInput, MealPlan
 
 
 def _get_slack_client() -> WebClient:
-    """Get configured Slack client - loads secret synchronously."""
-    import asyncio
-    import inspect
+    """Get configured Slack client from environment variable."""
+    import os
 
-    # Check if we're in an async context
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # We're in an async context, need to use sync API
-            # Use prefect.runtime to get the secret value directly
-            from prefect.runtime import secret
-            slack_bot_token = secret.get("slack-bot-token")
-        else:
-            # We're in a sync context
-            slack_bot_secret = Secret.load("slack-bot-token")
-            slack_bot_token = slack_bot_secret.get()
-    except RuntimeError:
-        # No event loop, use sync version
-        slack_bot_secret = Secret.load("slack-bot-token")
-        slack_bot_token = slack_bot_secret.get()
-
+    slack_bot_token = os.environ.get("SLACK_BOT_TOKEN")
+    if not slack_bot_token:
+        raise ValueError("SLACK_BOT_TOKEN environment variable not set")
     return WebClient(token=slack_bot_token)
 
 

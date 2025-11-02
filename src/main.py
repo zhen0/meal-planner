@@ -372,13 +372,16 @@ async def weekly_meal_planner_flow(
     6. If feedback: regenerates meal plan
     7. Posts final confirmation
     """
-    # Set environment variables required by Pydantic AI and Logfire
+    # Set environment variables required by Pydantic AI, Logfire, and Slack
     anthropic_secret = await Secret.load("anthropic-api-key")
     anthropic_api_key = anthropic_secret.get()
     os.environ["ANTHROPIC_API_KEY"] = anthropic_api_key
     logfire_secret = await Secret.load("logfire-token")
     logfire_token = logfire_secret.get()
     os.environ["LOGFIRE_TOKEN"] = logfire_token
+    slack_secret = await Secret.load("slack-bot-token")
+    slack_token = slack_secret.get()
+    os.environ["SLACK_BOT_TOKEN"] = slack_token
 
     # Configure Logfire observability
     logfire.configure()
