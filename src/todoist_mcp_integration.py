@@ -6,14 +6,13 @@ Uses Pydantic AI agent with Todoist MCP tools to create grocery tasks.
 from typing import List
 
 import logfire
-from prefect.blocks.system import Secret
 from pydantic_ai import Agent
 from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
-from pydantic_ai.mcp import MCPServerStreamableHTTP
 
 from .config import get_config
 from .models import MealPlan
 from .security_validation import validate_and_audit_task_creation
+from .services.mcp_client_manager import get_mcp_manager
 from .utils.ingredient_helpers import count_total_ingredients
 
 # System prompt for Todoist task creation agent
@@ -71,23 +70,9 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     # Count total tasks to create using helper function
     total_ingredients = count_total_ingredients(meal_plan)
 
-    # Load Todoist API token from Prefect secret block
-    try:
-        todoist_secret = await Secret.load("todoist-mcp-auth-token")
-        todoist_token = todoist_secret.get()
-        logfire.info("Loaded Todoist API token from secret block")
-    except Exception as e:
-        logfire.error("Failed to load todoist-mcp-auth-token secret", error=str(e))
-        raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
-
-    try:# Connect to Todoist MCP server with authentication
-        todoist_mcp = MCPServerStreamableHTTP(
-            config.todoist_mcp_server_url,
-            headers={"Authorization": f"Bearer {todoist_token}"},
-        )
-    except Exception as e:
-        logfire.error("Failed to connect to Todoist MCP server", error=str(e))
-        raise ValueError(f"Failed to connect to Todoist MCP server: {e}")
+    # Get MCP client from manager
+    mcp_manager = get_mcp_manager()
+    todoist_mcp = await mcp_manager.get_todoist_client()
 
     # Create Pydantic AI agent with Todoist MCP tools
     agent = Agent(
