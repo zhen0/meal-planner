@@ -7,7 +7,7 @@ import asyncio
 import re
 from typing import Optional, Tuple
 
-from prefect.variables import Variable
+from prefect import variables
 import httpx
 import logfire
 from slack_sdk import WebClient
@@ -19,7 +19,6 @@ from .models import ApprovalInput, MealPlan
 
 def _get_slack_client() -> WebClient:
     """Get configured Slack client."""
-    # config = get_config()
     slack_bot_secret = Secret.load("slack-bot-token")
     slack_bot_token = slack_bot_secret.get()
     return WebClient(token=slack_bot_token)
@@ -80,18 +79,18 @@ async def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) 
     Raises:
         SlackApiError: If posting fails
     """
-    # config = get_config()
-    slack_channel_id = Variable.get("slack_channel_id")
+    
+    slack_channel_id = await variables.get("slack_channel_id", default=None)
     client = _get_slack_client()
 
     message_text = format_meal_plan_message(meal_plan)
-
-    logfire.info("Posting meal plan to Slack", channel_id= Variable.get("slack_channel_id"), flow_run_id=flow_run_id)
+    channel_id = await variables.get("slack_channel_id", default=None)
+    logfire.info("Posting meal plan to Slack", channel_id= channel_id, flow_run_id=flow_run_id)
 
     try:
         # Include flow_run_id in metadata so webhook can resume the flow
         post_kwargs = {
-            "channel": Variable.get("slack_channel_id"),
+            "channel": channel_id,
             "text": message_text,
             "mrkdwn": True,
         }
@@ -111,7 +110,7 @@ async def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) 
         logfire.info(
             "Successfully posted meal plan to Slack",
             message_ts=message_ts,
-            channel_id=Variable.get("slack_channel_id"),
+            channel_id=channel_id,
             flow_run_id=flow_run_id,
         )
 
@@ -184,7 +183,6 @@ async def monitor_slack_thread_for_approval(
         TimeoutError: If no response received within timeout
         SlackApiError: If Slack API calls fail
     """
-    # config = get_config()
     client = _get_slack_client()
 
     logfire.info(
@@ -414,7 +412,6 @@ async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
     Raises:
         SlackApiError: If posting fails
     """
-    # config = get_config()
     client = _get_slack_client()
 
     # Collect unique ingredient names
@@ -442,7 +439,7 @@ async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
 
     try:
         client.chat_postMessage(
-            channel=Variable.get("slack_channel_id"),
+            channel=channel_id,
             text=message_text,
             mrkdwn=True,
         )
@@ -465,7 +462,6 @@ async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
     Raises:
         SlackApiError: If posting fails
     """
-    # config = get_config()
     client = _get_slack_client()
 
     # Build detailed message
@@ -514,7 +510,7 @@ async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
 
     try:
         client.chat_postMessage(
-            channel=Variable.get("slack_channel_id"),
+            channel=channel_id,
             text=message_text,
             mrkdwn=True,
         )

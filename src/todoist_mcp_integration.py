@@ -11,9 +11,8 @@ from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 from prefect.blocks.system import Secret
 from prefect.variables import Variable
-# from .config import get_config
+
 from .models import MealPlan
-# from .security_validation import validate_and_audit_task_creation
 
 
 # System prompt for Todoist task creation agent
@@ -54,14 +53,6 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     Raises:
         ProjectAccessDenied: If project ID validation fails
     """
-    # config = get_config()
-
-    # CRITICAL: Validate project ID before making ANY calls
-    # validate_and_audit_task_creation(
-    #     project_id=Variable.get("todoist_grocery_project_id"),
-    #     task_content="Validation check",
-    # )
-
     logfire.info(
         "Creating grocery tasks from meal plan via Pydantic AI agent",
         num_meals=len(meal_plan.meals),
@@ -82,7 +73,8 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
 
     todoist_mcp_server_url = Variable.get("todoist_mcp_server_url")
-    try:# Connect to Todoist MCP server with authentication
+    try:
+        # Connect to Todoist MCP server with authentication
         todoist_mcp = MCPServerStreamableHTTP(
             todoist_mcp_server_url,
             headers={"Authorization": f"Bearer {todoist_token}"},
@@ -112,7 +104,8 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     # Build the prompt with meal plan details
     prompt = f"""Create Todoist grocery tasks for the following meal plan.
 
-**CRITICAL: Use project_id: {Variable.get("todoist_grocery_project_id")}**
+    project_id = await variables.get("todoist_grocery_project_id", default=None)
+**CRITICAL: Use project_id: {project_id}**
 
 **Meal Plan:**
 
@@ -136,7 +129,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
 **Instructions:**
 1. Create a separate Todoist task for EACH ingredient listed above
-2. Use project_id: {Variable.get("todoist_grocery_project_id")}
+2. Use project_id: {project_id}
 3. Format: "[Meal Name] ingredient - quantity unit (notes if any)"
 4. For shared ingredients, use "[Shared]" as the prefix
 5. Add labels: ["grocery", "meal-prep", "this-week"]
@@ -161,7 +154,7 @@ Please create all {total_ingredients} grocery tasks now using the Todoist MCP to
             {
                 "success": True,
                 "total_tasks": total_ingredients,
-                "project_id": Variable.get("todoist_grocery_project_id"),
+                    "project_id": project_id,
                 "agent_response": str(result.output),
             }
         ]

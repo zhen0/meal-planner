@@ -9,7 +9,6 @@ import logfire
 from pydantic_ai import Agent
 from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 
-# from .config import get_config
 from .models import DietaryPreferences, MealPlan
 
 

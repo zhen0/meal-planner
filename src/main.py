@@ -19,7 +19,6 @@ from prefect.blocks.system import Secret
 from prefect.variables import Variable
 
 from .claude_integration import generate_meal_plan, parse_dietary_preferences
-# from .config import get_config
 from .models import ApprovalInput, DietaryPreferences, MealPlan
 from .slack_integration import (
     monitor_slack_thread_for_approval,
@@ -373,15 +372,6 @@ async def weekly_meal_planner_flow(
     6. If feedback: regenerates meal plan
     7. Posts final confirmation
     """
-    # # Load configuration inside flow (not at module import time)
-    # # This works with Prefect managed execution where secrets/variables
-    # # are injected as environment variables via job_variables
-    # config = get_config()
-
-    # # Validate that all required configuration is present
-    # # This will raise a clear error if secrets/variables are not configured in Prefect Cloud
-    # config.validate_required_for_flow()
-
     # Set environment variables required by Pydantic AI and Logfire
     anthropic_secret = await Secret.load("anthropic-api-key")
     anthropic_api_key = anthropic_secret.get()
@@ -395,7 +385,7 @@ async def weekly_meal_planner_flow(
     logfire.instrument_httpx()  # Auto-trace HTTP requests (Slack, MCP server)
 
     with logfire.span("flow:weekly_meal_planner"):
-        logfire.info("Starting weekly meal planner flow")
+        logfire.info("Starting weekly meal planner flow")       
 
         # Task 1: Parse dietary preferences
         logfire.info("Parsing dietary preferences", dietary_preferences=dietary_preferences)
@@ -427,13 +417,14 @@ async def weekly_meal_planner_flow(
                 # Task 4: Kick off independent polling deployment as fallback
                 logfire.info("Kicking off independent Slack polling deployment as fallback")
                 pause_key = f"approval-{regeneration_count}"
+                channel_id = await variables.get("slack_channel_id", default=None)
 
                 # Trigger polling flow as completely separate deployment run
                 # This runs independently and persists even when this flow pauses
                 await run_deployment(
                     name="slack-approval-polling/slack-polling",
                     parameters={
-                        "channel_id": Variable.get("slack_channel_id"),
+                        "channel_id": channel_id,
                         "thread_ts": message_ts,
                         "flow_run_id": current_flow_run_id,
                         "pause_key": pause_key,
