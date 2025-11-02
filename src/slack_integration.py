@@ -8,6 +8,7 @@ import re
 from typing import Optional, Tuple
 
 from prefect import variables
+from prefect.variables import Variable
 import httpx
 import logfire
 from slack_sdk import WebClient
@@ -65,7 +66,7 @@ def format_meal_plan_message(meal_plan: MealPlan) -> str:
 
 
 @logfire.instrument("post_meal_plan_to_slack")
-async def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) -> str:
+def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) -> str:
     """
     Post meal plan to Slack channel.
 
@@ -79,8 +80,7 @@ async def post_meal_plan_to_slack(meal_plan: MealPlan, flow_run_id: str = None) 
     Raises:
         SlackApiError: If posting fails
     """
-    channel_id = await variables.get("slack_channel_id", default=None)
-    client = await _get_slack_client()
+    channel_id= Variable.get("slack_channel_id")
 
     message_text = format_meal_plan_message(meal_plan)
     logfire.info("Posting meal plan to Slack", channel_id=channel_id, flow_run_id=flow_run_id)
