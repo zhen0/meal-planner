@@ -144,7 +144,7 @@ async def test_security_validation_blocks_wrong_project(monkeypatch):
     monkeypatch.setenv("TODOIST_MCP_SERVER_URL", "https://mock-mcp.com")
 
     # Create meal plan
-    meal_plan = MealPlan(
+    MealPlan(
         meals=[
             Meal(
                 name="Test Meal",

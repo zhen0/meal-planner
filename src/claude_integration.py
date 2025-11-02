@@ -9,9 +9,7 @@ import logfire
 from pydantic_ai import Agent
 from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 
-from .config import get_config
 from .models import DietaryPreferences, MealPlan
-
 
 # System prompts
 PREFERENCE_PARSER_PROMPT = """You are a dietary preference parser. Your job is to convert natural, everyday language dietary preferences into structured JSON format.

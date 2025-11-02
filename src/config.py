@@ -5,14 +5,13 @@ with fallback to environment variables for local development.
 """
 
 import os
-from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
 try:
-    from prefect.blocks.system import Secret, String
+    from prefect.blocks.system import Secret
     PREFECT_AVAILABLE = True
 except ImportError:
     PREFECT_AVAILABLE = False

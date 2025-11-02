@@ -7,59 +7,23 @@ import asyncio
 import re
 from typing import Optional, Tuple
 
-import httpx
 import logfire
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 from .config import get_config
 from .models import ApprovalInput, MealPlan
+from .utils.slack_formatting import (
+    format_final_meal_plan,
+    format_meal_plan_message,
+    format_simple_grocery_list,
+)
 
 
 def _get_slack_client() -> WebClient:
     """Get configured Slack client."""
     config = get_config()
     return WebClient(token=config.slack_bot_token)
-
-
-@logfire.instrument("format_meal_plan_message")
-def format_meal_plan_message(meal_plan: MealPlan) -> str:
-    """
-    Format meal plan as Slack message.
-
-    Args:
-        meal_plan: MealPlan object to format
-
-    Returns:
-        str: Formatted Slack message
-    """
-    lines = ["🍽️ *YOUR WEEKLY MEAL PLAN* (for approval)\n"]
-
-    # Add each meal
-    for i, meal in enumerate(meal_plan.meals, 1):
-        lines.append(f"*Meal {i}: {meal.name}*")
-        lines.append(
-            f"Active: {meal.active_time_minutes} min | "
-            f"Serves {meal.serves} | "
-            f"Ingredients: {len(meal.ingredients)} items"
-        )
-        lines.append(f"_{meal.description}_\n")
-
-    # Add shared ingredients info
-    if meal_plan.shared_ingredients:
-        lines.append(f"📊 *Shared Ingredients:* {len(meal_plan.shared_ingredients)} items")
-        shared_names = [ing.name for ing in meal_plan.shared_ingredients[:3]]
-        lines.append(f"_{', '.join(shared_names)}{'...' if len(meal_plan.shared_ingredients) > 3 else ''}_\n")
-
-    # Add approval instructions
-    lines.append("---")
-    lines.append("*How to respond:*")
-    lines.append("• Reply `approve` or `✓` to accept this plan")
-    lines.append("• Reply `reject` or `✗` to reject")
-    lines.append("• Reply `feedback: <your feedback>` to regenerate with changes")
-    lines.append("  Example: `feedback: make it spicier` or `feedback: no tomatoes`")
-
-    return "\n".join(lines)
 
 
 @logfire.instrument("post_meal_plan_to_slack")
@@ -180,7 +144,7 @@ async def monitor_slack_thread_for_approval(
         TimeoutError: If no response received within timeout
         SlackApiError: If Slack API calls fail
     """
-    config = get_config()
+    get_config()
     client = _get_slack_client()
 
     logfire.info(
@@ -413,26 +377,7 @@ async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
     config = get_config()
     client = _get_slack_client()
 
-    # Collect unique ingredient names
-    unique_items = set()
-
-    for meal in meal_plan.meals:
-        for ingredient in meal.ingredients:
-            unique_items.add(ingredient.name)
-
-    for ingredient in meal_plan.shared_ingredients:
-        unique_items.add(ingredient.name)
-
-    # Build simple list message
-    lines = ["🛒 *GROCERY LIST*\n"]
-
-    # Add items alphabetically
-    for item in sorted(unique_items):
-        lines.append(f"• {item}")
-
-    lines.append(f"\n_Total: {len(unique_items)} items_")
-
-    message_text = "\n".join(lines)
+    message_text = format_simple_grocery_list(meal_plan)
 
     logfire.info("Posting simple grocery list to Slack")
 
@@ -464,47 +409,7 @@ async def post_final_meal_plan_to_slack(meal_plan: MealPlan) -> None:
     config = get_config()
     client = _get_slack_client()
 
-    # Build detailed message
-    lines = ["✅ *MEAL PLAN APPROVED*\n", "🍽️ *MEALS THIS WEEK*\n"]
-
-    # Add each meal with full details
-    for i, meal in enumerate(meal_plan.meals, 1):
-        lines.append(f"*Meal {i}: {meal.name}*")
-        lines.append(
-            f"Serves {meal.serves} | "
-            f"Active Time: {meal.active_time_minutes} min | "
-            f"Inactive Time: {meal.inactive_time_minutes} min"
-        )
-        lines.append(f"{meal.description}\n")
-
-        # Ingredients
-        lines.append("*Ingredients:*")
-        for ing in meal.ingredients:
-            line = f"• {ing.name} - {ing.quantity} {ing.unit}"
-            if ing.shopping_notes:
-                line += f" ({ing.shopping_notes})"
-            lines.append(line)
-
-        # Instructions
-        lines.append("\n*Instructions:*")
-        for inst in meal.instructions:
-            lines.append(f"{inst.step}. {inst.text}")
-
-        lines.append("\n---\n")
-
-    # Shared ingredients
-    if meal_plan.shared_ingredients:
-        lines.append(f"📋 *Shared Ingredients* ({len(meal_plan.shared_ingredients)} items)")
-        for ing in meal_plan.shared_ingredients:
-            line = f"• {ing.name} - {ing.quantity} {ing.unit}"
-            if ing.shopping_notes:
-                line += f" ({ing.shopping_notes})"
-            lines.append(line)
-        lines.append("")
-
-    lines.append("✅ Ingredients added to Todoist Grocery project!")
-
-    message_text = "\n".join(lines)
+    message_text = format_final_meal_plan(meal_plan)
 
     logfire.info("Posting final meal plan to Slack")
 

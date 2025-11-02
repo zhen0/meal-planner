@@ -1,9 +1,9 @@
 """Unit tests for slack_integration module."""
 
-import pytest
 
-from src.models import ApprovalInput, Ingredient, Meal, MealPlan
-from src.slack_integration import format_meal_plan_message, parse_slack_response
+from src.models import Ingredient, Meal, MealPlan
+from src.slack_integration import parse_slack_response
+from src.utils.slack_formatting import format_meal_plan_message
 
 
 def test_format_meal_plan_message():

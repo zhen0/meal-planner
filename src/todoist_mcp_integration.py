@@ -6,15 +6,15 @@ Uses Pydantic AI agent with Todoist MCP tools to create grocery tasks.
 from typing import List
 
 import logfire
+from prefect.blocks.system import Secret
 from pydantic_ai import Agent
 from pydantic_ai.durable_exec.prefect import PrefectAgent, TaskConfig
 from pydantic_ai.mcp import MCPServerStreamableHTTP
-from prefect.blocks.system import Secret
 
 from .config import get_config
 from .models import MealPlan
 from .security_validation import validate_and_audit_task_creation
-
+from .utils.ingredient_helpers import count_total_ingredients
 
 # System prompt for Todoist task creation agent
 TODOIST_AGENT_PROMPT = """You are a grocery task creation assistant. Your job is to create tasks in Todoist based on meal plans.
@@ -68,9 +68,8 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         num_shared_ingredients=len(meal_plan.shared_ingredients),
     )
 
-    # Count total tasks to create
-    total_ingredients = sum(len(meal.ingredients) for meal in meal_plan.meals)
-    total_ingredients += len(meal_plan.shared_ingredients)
+    # Count total tasks to create using helper function
+    total_ingredients = count_total_ingredients(meal_plan)
 
     # Load Todoist API token from Prefect secret block
     try:
@@ -126,7 +125,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
     # Add shared ingredients
     if meal_plan.shared_ingredients:
-        prompt += f"\n**Shared Ingredients (used across multiple meals):**\n"
+        prompt += "\n**Shared Ingredients (used across multiple meals):**\n"
         for ingredient in meal_plan.shared_ingredients:
             notes = f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
             prompt += f"- {ingredient.name} - {ingredient.quantity} {ingredient.unit}{notes}\n"
