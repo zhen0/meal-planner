@@ -57,14 +57,6 @@ deployments:
         - "httpx>=0.27.0"
         - "pydantic>=2.0.0"
         - "python-dotenv>=1.0.0"
-      env:
-        ANTHROPIC_API_KEY: "{{ prefect.secrets.anthropic-api-key }}"
-        SLACK_BOT_TOKEN: "{{ prefect.secrets.slack-bot-token }}"
-        SLACK_CHANNEL_ID: "{{ prefect.variables.slack-channel-id }}"
-        TODOIST_GROCERY_PROJECT_ID: "{{ prefect.variables.todoist-grocery-project-id }}"
-        TODOIST_MCP_SERVER_URL: "{{ prefect.variables.todoist-mcp-server-url }}"
-        TODOIST_MCP_AUTH_TOKEN: "{{ prefect.secrets.todoist-mcp-auth-token }}"
-        LOGFIRE_TOKEN: "{{ prefect.secrets.logfire-token }}"
   schedules:
   - cron: 0 17 * * 6
     timezone: EST
