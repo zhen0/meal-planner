@@ -369,6 +369,7 @@ async def poll_slack_and_resume_flow(
     print(f"Poll Interval Seconds: {poll_interval_seconds}")
     try:
         # Poll Slack for approval
+        print(f"Polling Slack for approval")
         approval_input = await monitor_slack_thread_for_approval(
             channel_id=channel_id,
             thread_ts=thread_ts,
@@ -403,7 +404,7 @@ async def poll_slack_and_resume_flow(
             flow_run_id=flow_run_id,
         )
         # Don't raise - this is a background task
-        print(f"Background polling task failed")    
+        print(f"Background polling task failed", error=str(e))    
 
 @logfire.instrument("post_simple_grocery_list_to_slack")
 async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
