@@ -73,6 +73,15 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
 
     todoist_mcp_server_url = await variables.get("todoist_mcp_server_url", default=None)
+
+    # Validate that the MCP server URL is configured
+    if not todoist_mcp_server_url:
+        logfire.error("Todoist MCP server URL is not configured")
+        raise ValueError(
+            "Todoist MCP server URL is not configured. "
+            "Please set the 'todoist_mcp_server_url' Prefect variable or TODOIST_MCP_SERVER_URL environment variable."
+        )
+
     try:
         # Connect to Todoist MCP server with authentication
         todoist_mcp = MCPServerStreamableHTTP(
@@ -85,10 +94,10 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
     # Create Pydantic AI agent with Todoist MCP tools
     agent = Agent(
-        'anthropic:claude-4-sonnet-20250514',
+        "anthropic:claude-4-sonnet-20250514",
         system_prompt=TODOIST_AGENT_PROMPT,
         toolsets=[todoist_mcp],
-        name='todoist-grocery-task-creator',
+        name="todoist-grocery-task-creator",
     )
 
     # Wrap with PrefectAgent for durable execution
@@ -117,14 +126,18 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     for meal in meal_plan.meals:
         prompt += f"\n**{meal.name}**\n"
         for ingredient in meal.ingredients:
-            notes = f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
+            notes = (
+                f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
+            )
             prompt += f"- {ingredient.name} - {ingredient.quantity} {ingredient.unit}{notes}\n"
 
     # Add shared ingredients
     if meal_plan.shared_ingredients:
-        prompt += f"\n**Shared Ingredients (used across multiple meals):**\n"
+        prompt += "\n**Shared Ingredients (used across multiple meals):**\n"
         for ingredient in meal_plan.shared_ingredients:
-            notes = f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
+            notes = (
+                f" ({ingredient.shopping_notes})" if ingredient.shopping_notes else ""
+            )
             prompt += f"- {ingredient.name} - {ingredient.quantity} {ingredient.unit}{notes}\n"
 
     prompt += f"""
@@ -156,7 +169,7 @@ Please create all {total_ingredients} grocery tasks now using the Todoist MCP to
             {
                 "success": True,
                 "total_tasks": total_ingredients,
-                    "project_id": project_id,
+                "project_id": project_id,
                 "agent_response": str(result.output),
             }
         ]
