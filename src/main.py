@@ -328,6 +328,10 @@ async def slack_approval_polling_flow(
         timeout_seconds: How long to poll before giving up
         poll_interval_seconds: How often to check Slack
     """
+    # Configure Logfire (environment variables are set by deployment job_variables)
+    logfire.configure()
+    logfire.instrument_httpx()
+
     with logfire.span("flow:slack_approval_polling"):
         logfire.info(
             "Starting independent Slack polling flow",
