@@ -381,7 +381,7 @@ async def weekly_meal_planner_flow(
     slack_secret = await Secret.load("slack-bot-token")
     slack_token = slack_secret.get()
     os.environ["SLACK_BOT_TOKEN"] = slack_token
-    slack_channel = await variables.get("slack_channel_id")
+    slack_channel = await variables.get("slack-channel-id")
     os.environ["SLACK_CHANNEL_ID"] = slack_channel
 
     # Configure Logfire observability
