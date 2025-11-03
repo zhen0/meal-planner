@@ -404,7 +404,7 @@ async def poll_slack_and_resume_flow(
             flow_run_id=flow_run_id,
         )
         # Don't raise - this is a background task
-        print(f"Background polling task failed", error=str(e))    
+        print(f"Background polling task failed: {e}")    
 
 @logfire.instrument("post_simple_grocery_list_to_slack")
 async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
