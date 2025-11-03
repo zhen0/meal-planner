@@ -329,8 +329,12 @@ async def slack_approval_polling_flow(
         poll_interval_seconds: How often to check Slack
     """
     # Note: This flow doesn't use Logfire to avoid authentication issues in deployment
-    # Prefect native logging will capture flow execution
-
+    # Prefect native logging will capture flow slack_secret = await Secret.load("slack-bot-token")
+    slack_secret = await Secret.load("slack-bot-token")
+    slack_token = slack_secret.get()
+    os.environ["SLACK_BOT_TOKEN"] = slack_token
+    slack_channel = await variables.get("slack-channel-id")
+    os.environ["SLACK_CHANNEL_ID"] = slack_channel
     await poll_slack_and_resume_flow(
         channel_id=channel_id,
         thread_ts=thread_ts,
