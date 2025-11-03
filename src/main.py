@@ -237,7 +237,7 @@ async def post_to_slack_task(meal_plan: MealPlan, flow_run_id: str = None) -> st
         str: Slack message timestamp
     """
     with logfire.span("task:post_to_slack"):
-        return await post_meal_plan_to_slack(meal_plan, flow_run_id)
+        return post_meal_plan_to_slack(meal_plan, flow_run_id)
 
 
 @task(
