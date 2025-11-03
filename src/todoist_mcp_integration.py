@@ -72,7 +72,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         logfire.error("Failed to load todoist-mcp-auth-token secret", error=str(e))
         raise ValueError(f"Failed to load todoist-mcp-auth-token secret: {e}")
 
-    todoist_mcp_server_url = await variables.get("todoist_mcp_server_url", default=None)
+    todoist_mcp_server_url = await variables.get("todoist-mcp-server-url", default=None)
 
     # Validate that the MCP server URL is configured
     if not todoist_mcp_server_url or (
@@ -81,7 +81,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
         logfire.error("Todoist MCP server URL is not configured")
         raise ValueError(
             "Todoist MCP server URL is not configured. "
-            "Please set the 'todoist_mcp_server_url' Prefect variable or TODOIST_MCP_SERVER_URL environment variable."
+            "Please set the 'todoist-mcp-server-url' Prefect variable or TODOIST_MCP_SERVER_URL environment variable."
         )
 
     try:
@@ -113,7 +113,7 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     )
 
     # Get the project ID
-    project_id = await variables.get("todoist_grocery_project_id", default=None)
+    project_id = await variables.get("todoist-grocery-project-id", default=None)
 
     # Build the prompt with meal plan details
     prompt = f"""Create Todoist grocery tasks for the following meal plan.
