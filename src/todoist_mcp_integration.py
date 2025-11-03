@@ -75,7 +75,9 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
     todoist_mcp_server_url = await variables.get("todoist_mcp_server_url", default=None)
 
     # Validate that the MCP server URL is configured
-    if not todoist_mcp_server_url:
+    if not todoist_mcp_server_url or (
+        isinstance(todoist_mcp_server_url, str) and not todoist_mcp_server_url.strip()
+    ):
         logfire.error("Todoist MCP server URL is not configured")
         raise ValueError(
             "Todoist MCP server URL is not configured. "
