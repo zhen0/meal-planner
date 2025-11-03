@@ -92,4 +92,3 @@ deployments:
       env:
         SLACK_BOT_TOKEN: "{{ prefect.secrets.slack-bot-token }}"
         SLACK_CHANNEL_ID: "{{ prefect.variables.slack-channel-id }}"
-        LOGFIRE_TOKEN: "{{ prefect.secrets.logfire-token }}"

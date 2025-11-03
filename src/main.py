@@ -328,27 +328,17 @@ async def slack_approval_polling_flow(
         timeout_seconds: How long to poll before giving up
         poll_interval_seconds: How often to check Slack
     """
-    # Configure Logfire (environment variables are set by deployment job_variables)
-    logfire.configure()
-    logfire.instrument_httpx()
+    # Note: This flow doesn't use Logfire to avoid authentication issues in deployment
+    # Prefect native logging will capture flow execution
 
-    with logfire.span("flow:slack_approval_polling"):
-        logfire.info(
-            "Starting independent Slack polling flow",
-            flow_run_id=flow_run_id,
-            pause_key=pause_key,
-        )
-
-        await poll_slack_and_resume_flow(
-            channel_id=channel_id,
-            thread_ts=thread_ts,
-            flow_run_id=flow_run_id,
-            pause_key=pause_key,
-            timeout_seconds=timeout_seconds,
-            poll_interval_seconds=poll_interval_seconds,
-        )
-
-        logfire.info("Slack polling flow completed")
+    await poll_slack_and_resume_flow(
+        channel_id=channel_id,
+        thread_ts=thread_ts,
+        flow_run_id=flow_run_id,
+        pause_key=pause_key,
+        timeout_seconds=timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+    )
 
 
 @flow(
