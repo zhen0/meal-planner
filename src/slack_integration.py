@@ -360,7 +360,13 @@ async def poll_slack_and_resume_flow(
         flow_run_id=flow_run_id,
         pause_key=pause_key,
     )
-
+    print(f"Starting background Slack polling task: {channel_id}, {thread_ts}, {flow_run_id}, {pause_key}, {timeout_seconds}, {poll_interval_seconds}")
+    print(f"Channel ID: {channel_id}")
+    print(f"Thread TS: {thread_ts}")
+    print(f"Flow Run ID: {flow_run_id}")
+    print(f"Pause Key: {pause_key}")
+    print(f"Timeout Seconds: {timeout_seconds}")
+    print(f"Poll Interval Seconds: {poll_interval_seconds}")
     try:
         # Poll Slack for approval
         approval_input = await monitor_slack_thread_for_approval(
@@ -369,19 +375,19 @@ async def poll_slack_and_resume_flow(
             timeout_seconds=timeout_seconds,
             poll_interval_seconds=poll_interval_seconds,
         )
-
+        print(f"Approval Input: {approval_input}")
         # Resume the flow with the approval input
         await resume_prefect_flow(
             flow_run_id=flow_run_id,
             approval_input=approval_input,
             key=pause_key,
         )
-
+        print(f"Flow Run ID: {flow_run_id}")
         logfire.info(
             "Background polling task completed successfully",
             flow_run_id=flow_run_id,
         )
-
+        print(f"Background polling task completed successfully")
     except TimeoutError as e:
         logfire.error(
             "Background polling task timed out",
@@ -389,7 +395,7 @@ async def poll_slack_and_resume_flow(
             flow_run_id=flow_run_id,
         )
         # Don't raise - let the flow timeout naturally
-
+        print(f"Background polling task timed out")
     except Exception as e:
         logfire.error(
             "Background polling task failed",
@@ -397,7 +403,7 @@ async def poll_slack_and_resume_flow(
             flow_run_id=flow_run_id,
         )
         # Don't raise - this is a background task
-
+        print(f"Background polling task failed")    
 
 @logfire.instrument("post_simple_grocery_list_to_slack")
 async def post_simple_grocery_list_to_slack(meal_plan: MealPlan) -> None:
