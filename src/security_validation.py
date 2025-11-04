@@ -31,8 +31,9 @@ def validate_project_id(project_id: Optional[str]) -> None:
         project_id: The project ID to validate
 
     Raises:
-        ProjectAccessDenied: If project_id doesn't match the allowed Grocery project
-        TypeError: If project_id is None (when type checking is enabled)
+        ProjectAccessDenied: If project_id doesn't match the allowed Grocery project,
+                           or if project_id is None or empty, or if the allowed
+                           project ID is not configured
 
     Example:
         >>> validate_project_id("12345")  # Passes if TODOIST_GROCERY_PROJECT_ID=12345
@@ -40,6 +41,17 @@ def validate_project_id(project_id: Optional[str]) -> None:
     """
     # Get the allowed grocery project ID from environment
     allowed_project_id = os.getenv("TODOIST_GROCERY_PROJECT_ID")
+
+    # Validate that the allowed project ID is configured
+    if not allowed_project_id or not allowed_project_id.strip():
+        logfire.error(
+            "SECURITY: TODOIST_GROCERY_PROJECT_ID not configured",
+            security_incident=True,
+        )
+        raise ProjectAccessDenied(
+            "Grocery project ID not configured. "
+            "Please set TODOIST_GROCERY_PROJECT_ID environment variable."
+        )
 
     # Log the validation attempt
     logfire.info(
@@ -61,7 +73,7 @@ def validate_project_id(project_id: Optional[str]) -> None:
         )
 
     # Handle empty project ID
-    if not project_id or (isinstance(project_id, str) and not project_id.strip()):
+    if not project_id or not project_id.strip():
         logfire.error(
             "SECURITY: Empty project ID",
             security_incident=True,
