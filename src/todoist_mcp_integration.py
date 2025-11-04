@@ -3,6 +3,7 @@ Todoist MCP integration with strict Grocery project restriction.
 Uses Pydantic AI agent with Todoist MCP tools to create grocery tasks.
 """
 
+import os
 from typing import List
 
 import logfire
@@ -118,9 +119,9 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
     # SECURITY: Validate project ID before creating any tasks
     # This ensures we only write to the designated Grocery project
-    import os
-    os.environ["TODOIST_GROCERY_PROJECT_ID"] = str(project_id) if project_id else ""
-    validate_project_id(str(project_id) if project_id else None)
+    project_id_str = str(project_id) if project_id else ""
+    os.environ["TODOIST_GROCERY_PROJECT_ID"] = project_id_str
+    validate_project_id(project_id_str if project_id else None)
 
     # Build the prompt with meal plan details
     prompt = f"""Create Todoist grocery tasks for the following meal plan.

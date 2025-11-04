@@ -29,8 +29,9 @@ def validate_project_id(project_id: str | None) -> None:
         project_id: The project ID to validate
 
     Raises:
-        ProjectAccessDenied: If project_id does not match the Grocery project ID
-        TypeError: If project_id is None
+        ProjectAccessDenied: If project_id does not match the Grocery project ID,
+            is None, or is empty
+        ValueError: If TODOIST_GROCERY_PROJECT_ID is not configured
 
     Example:
         >>> validate_project_id("12345")  # OK if TODOIST_GROCERY_PROJECT_ID=12345
@@ -56,7 +57,9 @@ def validate_project_id(project_id: str | None) -> None:
             security_incident=True,
             allowed_project_id=allowed_project_id,
         )
-        raise TypeError("Project ID cannot be None")
+        raise ProjectAccessDenied(
+            f"Project ID cannot be None. Grocery project only (ID: {allowed_project_id})"
+        )
 
     # Check for empty string
     if not project_id or not project_id.strip():

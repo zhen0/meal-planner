@@ -39,5 +39,5 @@ def test_validate_project_id_none(monkeypatch):
     """Test validation with None project ID."""
     monkeypatch.setenv("TODOIST_GROCERY_PROJECT_ID", "12345")
 
-    with pytest.raises((ProjectAccessDenied, TypeError)):
+    with pytest.raises(ProjectAccessDenied):
         validate_project_id(None)
