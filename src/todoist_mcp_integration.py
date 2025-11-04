@@ -13,6 +13,10 @@ from prefect.blocks.system import Secret
 from prefect import variables
 
 from .models import MealPlan
+from .security_validation import ProjectAccessDenied, validate_project_id
+
+# Export ProjectAccessDenied for external use
+__all__ = ["create_grocery_tasks_from_meal_plan", "ProjectAccessDenied"]
 
 
 # System prompt for Todoist task creation agent
@@ -114,6 +118,10 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
     # Get the project ID
     project_id = await variables.get("todoist-grocery-project-id", default=None)
+
+    # SECURITY: Validate project ID before proceeding
+    # This ensures we only create tasks in the allowed Grocery project
+    validate_project_id(project_id)
 
     # Build the prompt with meal plan details
     prompt = f"""Create Todoist grocery tasks for the following meal plan.
