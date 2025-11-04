@@ -13,6 +13,7 @@ from prefect.blocks.system import Secret
 from prefect import variables
 
 from .models import MealPlan
+from .security_validation import validate_project_id
 
 
 # System prompt for Todoist task creation agent
@@ -114,6 +115,12 @@ async def create_grocery_tasks_from_meal_plan(meal_plan: MealPlan) -> List[dict]
 
     # Get the project ID
     project_id = await variables.get("todoist-grocery-project-id", default=None)
+
+    # SECURITY: Validate project ID before creating any tasks
+    # This ensures we only write to the designated Grocery project
+    import os
+    os.environ["TODOIST_GROCERY_PROJECT_ID"] = str(project_id) if project_id else ""
+    validate_project_id(str(project_id) if project_id else None)
 
     # Build the prompt with meal plan details
     prompt = f"""Create Todoist grocery tasks for the following meal plan.
