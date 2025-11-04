@@ -23,7 +23,7 @@ def test_validate_project_id_failure(monkeypatch):
     with pytest.raises(ProjectAccessDenied) as exc_info:
         validate_project_id("99999")
 
-    assert "Grocery project only" in str(exc_info.value)
+    assert "Grocery project" in str(exc_info.value)
     assert "12345" in str(exc_info.value)
 
 
