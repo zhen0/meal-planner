@@ -56,7 +56,7 @@ def validate_project_id(project_id: str) -> None:
         )
 
         raise ProjectAccessDenied(
-            f"Access denied: Tasks can only be created in Grocery project only. "
+            f"Access denied: Grocery project only. "
             f"Attempted: {project_id}, Allowed: {allowed_project_id}"
         )
 

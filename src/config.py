@@ -82,8 +82,20 @@ def get_config() -> Config:
         Config: Configuration object
 
     Raises:
-        ValueError: If required configuration is missing
+        ValueError: If required configuration is missing or invalid
     """
+    # Helper function to safely parse integers from environment variables
+    def get_int_env(key: str, default: str) -> int:
+        """Parse integer from environment variable with error handling."""
+        value_str = os.getenv(key, default)
+        try:
+            return int(value_str)
+        except ValueError:
+            raise ValueError(
+                f"Invalid integer value for {key}: '{value_str}'. "
+                f"Expected a numeric string."
+            )
+
     return Config(
         # Anthropic / Claude
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
@@ -106,11 +118,9 @@ def get_config() -> Config:
         logfire_token=os.getenv("LOGFIRE_TOKEN"),
         logfire_project_name=os.getenv("LOGFIRE_PROJECT_NAME", "meal-planner-agent"),
         # Flow Configuration
-        approval_timeout_seconds=int(os.getenv("APPROVAL_TIMEOUT_SECONDS", "86400")),
-        slack_poll_interval_seconds=int(
-            os.getenv("SLACK_POLL_INTERVAL_SECONDS", "30")
-        ),
-        max_regeneration_attempts=int(os.getenv("MAX_REGENERATION_ATTEMPTS", "3")),
+        approval_timeout_seconds=get_int_env("APPROVAL_TIMEOUT_SECONDS", "86400"),
+        slack_poll_interval_seconds=get_int_env("SLACK_POLL_INTERVAL_SECONDS", "30"),
+        max_regeneration_attempts=get_int_env("MAX_REGENERATION_ATTEMPTS", "3"),
         # Dietary Preferences
         dietary_preferences=os.getenv(
             "DIETARY_PREFERENCES",
